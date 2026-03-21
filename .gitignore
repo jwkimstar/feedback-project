@@ -1,3 +1,12 @@
-git
-xplane
+__pycache__/
+.pytest_cache/
+.ruff_cache/
+*.pyc
+*.pyo
+*.egg-info/
+.venv/
+venv/
+xplane/
+artifacts/
 .vscode/
+git

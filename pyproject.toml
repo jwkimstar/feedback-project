@@ -1,0 +1,35 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "feedback-project"
+version = "0.1.0"
+description = "Fault-tolerant steering and telemetry tooling for X-Plane experiments."
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = []
+
+[project.optional-dependencies]
+plots = ["matplotlib>=3.8"]
+dev = ["pytest>=8.0", "ruff>=0.3"]
+
+[project.scripts]
+python-client = "python_client.main:main"
+python-client-plot-live = "python_client.cli.plot_live:main"
+python-client-record = "python_client.cli.record_session:main"
+python-client-run-all = "python_client.cli.run_all:main"
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 88
+target-version = "py311"
