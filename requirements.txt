@@ -1,0 +1,14 @@
+contourpy==1.3.3
+cycler==0.12.1
+-e git+https://github.com/jwkimstar/feedback-project.git@6c59f3b576418b7b3560018290a9b2850d550ed5#egg=feedback_project
+fonttools==4.62.1
+kiwisolver==1.5.0
+matplotlib==3.10.8
+numpy==2.4.3
+packaging==26.0
+pillow==12.1.1
+pyparsing==3.3.2
+python-dateutil==2.9.0.post0
+six==1.17.0
+# Editable install with no version control (xplaneconnect==1.3rc6)
+-e /Users/jaykim/Desktop/ASE370C/feedback-project/XPlaneConnect
