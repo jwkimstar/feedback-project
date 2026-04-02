@@ -6,6 +6,7 @@ from pathlib import Path
 class NetworkConfig:
     multicast_group: str = "239.255.1.1"
     multicast_port: int = 49707
+    command_port: int = 49000
     socket_timeout_seconds: float = 2.0
     beacon_wait_seconds: float = 5.0
     rpos_hz: int = 10

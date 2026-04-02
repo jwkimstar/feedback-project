@@ -14,10 +14,14 @@ class StateHandler(Protocol):
 
 def stream_to_handlers(wait: float, hz: int, handlers: list[StateHandler]) -> None:
     with XPlaneClient.discover(wait=wait, hz=hz) as client:
-        while True:
-            state = client.recv_state()
-            for handler in handlers:
-                handler.handle_state(state)
+        run_client_to_handlers(client, handlers)
+
+
+def run_client_to_handlers(client: XPlaneClient, handlers: list[StateHandler]) -> None:
+    while True:
+        state = client.recv_state()
+        for handler in handlers:
+            handler.handle_state(state)
 
 
 def close_handlers(handlers: list[StateHandler]) -> None:

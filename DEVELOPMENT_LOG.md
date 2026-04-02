@@ -83,3 +83,57 @@ To support those goals, the project architecture was recreated around a single `
 - Add scripted step-input experiment support for repeatable controller evaluation runs.
 - Add offline analysis plots and metrics for step response, including overshoot, settling time, rise time, and steady-state error.
 - Add replay tooling so recorded sessions can be re-plotted and compared across controller versions.
+
+## 2026-04-02
+
+### Summary
+
+Refreshed the repository context to match the current tree and current local verification environment.
+
+The project is still centered on a `src/python_client/` package for X-Plane telemetry experiments, with transport, CLI entry points, logging, plotting, and controller prototypes split into separate modules. The older monolithic prototype also still exists as `actual_code.py`, which matters because it contains control-command transmission logic that has not yet been folded back into the packaged runtime.
+
+### Current Repository State
+
+- `python_client.xplane`
+  - Handles multicast beacon discovery, UDP client setup, RPOS request/stop packets, and RPOS packet parsing into typed models.
+- `python_client.cli`
+  - Exposes the main runnable surfaces:
+    - `run_client`: print live pitch, heading, and roll
+    - `record_session`: stream telemetry into CSV
+    - `plot_live`: open the live Matplotlib plot
+    - `run_all`: fan out one telemetry stream to terminal, CSV, and plot handlers
+- `python_client.runtime`
+  - Provides the shared loop that discovers X-Plane, receives telemetry, and dispatches each sample to handler objects.
+- `python_client.logging`
+  - Writes telemetry-only CSV rows using a fixed schema with no timestamps, reference commands, or actuator outputs yet.
+- `python_client.plotting`
+  - Includes a live plotter and a minimal offline CSV loader, but not step-response metrics or richer analysis outputs yet.
+- `python_client.control`
+  - Contains prototype control abstractions:
+    - `HeadingHoldController` computes an aileron command from heading and roll feedback
+    - `ManualFlyByWire` passes pilot inputs through a stable interface for future augmentation
+- `actual_code.py`
+  - Remains in the repository as the older all-in-one script.
+  - It still contains direct `DATA` packet transmission for rudder commands and a yaw-damper experiment path that the packaged runtime does not yet implement.
+
+### Verification Notes
+
+- `pyproject.toml` declares `requires-python = ">=3.11"`.
+- The current local default interpreter is `Python 3.9.6`, so package imports fail immediately on `float | None` type syntax in `src/python_client/models.py`.
+- `PYTHONPATH=src python3 -m python_client --help`
+  - Failed under Python 3.9 due to the Python 3.11+ type-annotation syntax used by the package.
+- `PYTHONPATH=src python3 -m python_client.cli.record_session --help`
+  - Failed for the same interpreter-version reason.
+- `PYTHONPATH=src python3 -m python_client.cli.run_all --help`
+  - Failed for the same interpreter-version reason.
+- `python3 -m pytest -q`
+  - Failed because `pytest` is not installed in the current Python 3.9 environment.
+- `python3 -m compileall src tests`
+  - Failed in the sandbox because Python attempted to write bytecode cache files under `/Users/jaykim/Library/Caches/com.apple.python/`, which is outside the writable sandbox.
+
+### Context To Carry Forward
+
+- Meaningful local verification now depends on setting up a Python 3.11+ environment first.
+- The packaged runtime can ingest and fan out telemetry, but it still does not send actuator commands back to X-Plane.
+- Controller prototypes exist, but they are not yet wired into a closed-loop execution path.
+- `actual_code.py` is still the only in-repo implementation that demonstrates direct control-command transmission, so it remains relevant reference material until that path is migrated into `src/python_client/`.

@@ -4,9 +4,12 @@ from pathlib import Path
 
 from python_client.console import TelemetryPrinter
 from python_client.config import DEFAULT_NETWORK_CONFIG, DEFAULT_PATHS_CONFIG
+from python_client.control import YawDamperController, YawDamperGains, YawDamperHandler
 from python_client.logging.recorder import SessionRecorder
 from python_client.plotting.realtime import LivePlotter
-from python_client.runtime import close_handlers, stream_to_handlers
+from python_client.runtime import close_handlers, run_client_to_handlers
+from python_client.xplane.client import XPlaneClient
+from python_client.xplane.exceptions import XPlaneIpNotFound
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -37,6 +40,23 @@ def build_parser() -> argparse.ArgumentParser:
         default=None,
         help="Path to the CSV file. Defaults to artifacts/session-YYYYMMDD-HHMMSS.csv",
     )
+    parser.add_argument(
+        "--yaw-damper",
+        action="store_true",
+        help="Enable the legacy yaw damper in the same process as the plotter/loggers.",
+    )
+    parser.add_argument(
+        "--yaw-damper-gain",
+        type=float,
+        default=1.0,
+        help="Proportional gain used by the yaw damper when enabled.",
+    )
+    parser.add_argument(
+        "--desired-yaw-rate-rad-s",
+        type=float,
+        default=0.0,
+        help="Desired yaw rate in radians per second when the yaw damper is enabled.",
+    )
     return parser
 
 
@@ -51,18 +71,40 @@ def main(argv: list[str] | None = None) -> int:
     handlers = []
 
     try:
-        printer = TelemetryPrinter()
-        recorder = SessionRecorder(output_path)
-        plotter = LivePlotter(hz=args.hz, history_seconds=args.history_seconds)
-        handlers = [printer, recorder, plotter]
+        with XPlaneClient.discover(wait=args.wait, hz=args.hz) as client:
+            command_provider = None
+            yaw_damper = None
+            if args.yaw_damper:
+                yaw_damper = YawDamperHandler(
+                    sender=client,
+                    controller=YawDamperController(
+                        YawDamperGains(proportional_gain=args.yaw_damper_gain)
+                    ),
+                    desired_yaw_rate_rad_s=args.desired_yaw_rate_rad_s,
+                )
+                command_provider = yaw_damper
 
-        recorder.__enter__()
-        print("Streaming telemetry, recording CSV, and updating the live plot.")
-        print(f"Recording telemetry to {output_path}. Press Ctrl+C to stop.\n")
-        stream_to_handlers(wait=args.wait, hz=args.hz, handlers=handlers)
+            printer = TelemetryPrinter(command_provider=command_provider)
+            recorder = SessionRecorder(output_path)
+            plotter = LivePlotter(
+                hz=args.hz,
+                history_seconds=args.history_seconds,
+                command_provider=command_provider,
+            )
+            handlers = [recorder]
+            if yaw_damper is not None:
+                handlers.append(yaw_damper)
+            handlers.extend([printer, plotter])
+
+            recorder.__enter__()
+            print("Streaming telemetry, recording CSV, and updating the live plot.")
+            if args.yaw_damper:
+                print("Yaw damper control is enabled in this same process.")
+            print(f"Recording telemetry to {output_path}. Press Ctrl+C to stop.\n")
+            run_client_to_handlers(client, handlers)
     except KeyboardInterrupt:
         print("\nStopping...")
-    except (ImportError, TimeoutError) as exc:
+    except (ImportError, TimeoutError, XPlaneIpNotFound) as exc:
         print(exc)
         return 1
     finally:

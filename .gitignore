@@ -6,7 +6,7 @@ __pycache__/
 *.egg-info/
 .venv/
 venv/
-xplane/
+/xplane/
 artifacts/
 .vscode/
 git

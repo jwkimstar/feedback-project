@@ -140,6 +140,44 @@ To choose an explicit CSV output path:
 python3 -m python_client.cli.run_all --hz 10 --output artifacts/all-in-one.csv
 ```
 
+### 5. Run the legacy yaw damper inside the package
+
+This preserves the control law that previously lived in `actual_code.py`, but runs it through the packaged client instead of opening a competing telemetry subscription.
+
+```bash
+python3 -m python_client.cli.run_yaw_damper --hz 10 --yaw-damper-gain 1.0
+```
+
+Installed script form:
+
+```bash
+python-client-run-yaw-damper --hz 10 --yaw-damper-gain 1.0
+```
+
+To target a nonzero yaw rate, pass `--desired-yaw-rate-rad-s`:
+
+```bash
+python3 -m python_client.cli.run_yaw_damper --hz 10 --yaw-damper-gain 1.0 --desired-yaw-rate-rad-s 0.05
+```
+
+Options:
+- `--yaw-damper-gain`: proportional gain for the yaw-damper controller
+- `--desired-yaw-rate-rad-s`: desired yaw rate in radians per second. `0.0` means drive yaw rate toward zero.
+
+### 6. Run plotting, recording, terminal output, and yaw damper together
+
+This is the recommended way to plot telemetry and apply the yaw damper concurrently, because everything shares one X-Plane client and one `RPOS` stream.
+
+```bash
+python3 -m python_client.cli.run_all --hz 10 --history-seconds 60 --yaw-damper
+```
+
+To use the same desired-yaw-rate setting in the combined runner:
+
+```bash
+python3 -m python_client.cli.run_all --hz 10 --history-seconds 60 --yaw-damper --desired-yaw-rate-rad-s 0.05
+```
+
 ## Running Without Installing
 
 If you want to run directly from source without `pip install -e`, use:
@@ -172,8 +210,9 @@ The current package lives under `src/python_client/`:
 - `python_client.cli.record_session`: record telemetry to CSV
 - `python_client.cli.plot_live`: open a live telemetry plot
 - `python_client.cli.run_all`: run terminal output, CSV recording, and live plotting together
+- `python_client.cli.run_yaw_damper`: run the migrated yaw damper controller
 - `python_client.xplane`: X-Plane discovery, UDP socket handling, and packet parsing
-- `python_client.control`: controller logic modules and future control-law extensions
+- `python_client.control`: controller logic modules including heading hold and yaw damper
 - `python_client.logging`: telemetry recording helpers
 - `python_client.plotting`: live and offline plotting helpers
 - `python_client.models`: shared typed data structures
@@ -233,4 +272,4 @@ python3 -m pip install -e '.[plots]'
 - enters its own infinite loop
 - owns the process until interrupted
 
-That means one command cannot also run the others unless there is an orchestrator that reads one telemetry stream and dispatches each sample to multiple outputs. `python_client.cli.run_all` is that combined entry point.
+That means one command cannot also run the others unless there is an orchestrator that reads one telemetry stream and dispatches each sample to multiple outputs. `python_client.cli.run_all` is that combined entry point, and the new `--yaw-damper` option extends that same pattern to closed-loop control.

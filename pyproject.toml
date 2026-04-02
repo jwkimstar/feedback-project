@@ -19,6 +19,7 @@ python-client = "python_client.main:main"
 python-client-plot-live = "python_client.cli.plot_live:main"
 python-client-record = "python_client.cli.record_session:main"
 python-client-run-all = "python_client.cli.run_all:main"
+python-client-run-yaw-damper = "python_client.cli.run_yaw_damper:main"
 
 [tool.setuptools]
 package-dir = {"" = "src"}
