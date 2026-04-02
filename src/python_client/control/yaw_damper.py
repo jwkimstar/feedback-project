@@ -22,15 +22,20 @@ class YawDamperController:
     def __init__(self, gains: YawDamperGains | None = None) -> None:
         self.gains = gains or YawDamperGains()
 
+    def compute_output(
+        self,
+        current_yaw_rate_rad_s: float,
+        signal: float = 0.0,
+    ) -> float:
+        aileron = self.gains.proportional_gain * (signal - current_yaw_rate_rad_s)
+        return max(self.gains.min_aileron, min(self.gains.max_aileron, aileron))
+
     def compute(
         self,
         state: AircraftState,
-        desired_yaw_rate_rad_s: float = 0.0,
+        signal: float = 0.0,
     ) -> ControlCommand:
-        aileron = self.gains.proportional_gain * (
-            state.r_rad_s - desired_yaw_rate_rad_s
-        )
-        aileron = max(self.gains.min_aileron, min(self.gains.max_aileron, aileron))
+        aileron = self.compute_output(state.r_rad_s, signal=signal)
         return ControlCommand(aileron=aileron)
 
 
@@ -41,19 +46,19 @@ class YawDamperHandler:
         self,
         sender: ControlCommandSender,
         controller: YawDamperController | None = None,
-        desired_yaw_rate_rad_s: float = 0.0,
+        signal: float = 0.0,
         print_status: bool = False,
     ) -> None:
         self.sender = sender
         self.controller = controller or YawDamperController()
-        self.desired_yaw_rate_rad_s = desired_yaw_rate_rad_s
+        self.signal = signal
         self.print_status = print_status
         self._latest_command: ControlCommand | None = None
 
     def handle_state(self, state: AircraftState) -> None:
         command = self.controller.compute(
             state,
-            desired_yaw_rate_rad_s=self.desired_yaw_rate_rad_s,
+            signal=self.signal,
         )
         self._latest_command = command
         self.sender.send_control_command(command)

@@ -1,7 +1,8 @@
 import argparse
 
+from python_client.cli.control_options import add_master_controller_arguments, build_master_controller
 from python_client.config import DEFAULT_NETWORK_CONFIG
-from python_client.control import YawDamperController, YawDamperGains, YawDamperHandler
+from python_client.control import MasterController, MasterControllerHandler, MasterControllerMode
 from python_client.runtime import close_handlers, run_client_to_handlers
 from python_client.xplane.client import XPlaneClient
 from python_client.xplane.exceptions import XPlaneIpNotFound
@@ -9,7 +10,7 @@ from python_client.xplane.exceptions import XPlaneIpNotFound
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        description="Run the legacy yaw damper against a live X-Plane telemetry stream."
+        description="Run the prototype master controller against a live X-Plane telemetry stream."
     )
     parser.add_argument(
         "--wait",
@@ -23,24 +24,15 @@ def build_parser() -> argparse.ArgumentParser:
         default=DEFAULT_NETWORK_CONFIG.rpos_hz,
         help="Requested RPOS update rate in Hz.",
     )
-    parser.add_argument(
-        "--yaw-damper-gain",
-        type=float,
-        default=1.0,
-        help="Proportional gain used by the yaw damper.",
-    )
-    parser.add_argument(
-        "--desired-yaw-rate-rad-s",
-        type=float,
-        default=0.0,
-        help="Desired yaw rate in radians per second.",
-    )
+    add_master_controller_arguments(parser, require_mode=False)
     return parser
 
 
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     handlers = []
+    mode, gains, targets = build_master_controller(args)
+    mode = mode or MasterControllerMode.YAW_DAMPER
 
     try:
         with XPlaneClient.discover(wait=args.wait, hz=args.hz) as client:
@@ -51,16 +43,14 @@ def main(argv: list[str] | None = None) -> int:
             print(f"  Version:  {client.beacon.xplane_version}")
             print()
 
-            yaw_damper = YawDamperHandler(
+            controller = MasterController(mode=mode, gains=gains, targets=targets)
+            master_handler = MasterControllerHandler(
                 sender=client,
-                controller=YawDamperController(
-                    YawDamperGains(proportional_gain=args.yaw_damper_gain)
-                ),
-                desired_yaw_rate_rad_s=args.desired_yaw_rate_rad_s,
+                controller=controller,
                 print_status=True,
             )
-            handlers = [yaw_damper]
-            print("Running yaw damper. Press Ctrl+C to stop.\n")
+            handlers = [master_handler]
+            print(f"Running control mode '{mode.value}'. Press Ctrl+C to stop.\n")
             run_client_to_handlers(client, handlers)
     except KeyboardInterrupt:
         print("\nStopping...")

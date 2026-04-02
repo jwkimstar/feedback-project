@@ -120,7 +120,23 @@ Options:
 - `--wait`: seconds to wait for X-Plane discovery
 - `--history-seconds`: amount of recent telemetry to keep on screen
 
-### 4. Run terminal output, CSV recording, and live plotting together
+### 4. Plot a recorded CSV session after the simulation
+
+This opens offline plots for recorded roll, pitch, yaw, `p`, `q`, and `r` using elapsed time inferred from the sample rate.
+
+```bash
+python3 -m python_client.cli.plot_recording artifacts/session-20260402-120000.csv --hz 10
+```
+
+Installed script form:
+
+```bash
+python-client-plot-recording artifacts/session-20260402-120000.csv --hz 10
+```
+
+The `--hz` flag is not a live streaming frequency here. It tells the tool what sample rate was used when the CSV was recorded so it can reconstruct elapsed time. The current CSV format does not store timestamps, so if the session was recorded at a different rate, pass the matching `--hz` value or the x-axis will be wrong.
+
+### 5. Run terminal output, CSV recording, and live plotting together
 
 This uses a single telemetry stream and fans each sample out to all three outputs in one process.
 
@@ -140,9 +156,17 @@ To choose an explicit CSV output path:
 python3 -m python_client.cli.run_all --hz 10 --output artifacts/all-in-one.csv
 ```
 
-### 5. Run the legacy yaw damper inside the package
+### 6. Run the prototype control cascade inside the package
 
-This preserves the control law that previously lived in `actual_code.py`, but runs it through the packaged client instead of opening a competing telemetry subscription.
+This preserves the control blocks that now live in `actual_code.py`, but runs them through the packaged client instead of opening a competing telemetry subscription.
+
+Available control-mode flags:
+
+- `--yaw-damper`: use only the yaw-damper block
+- `--yaw-roll-damper`: cascade roll damper into yaw damper
+- `--yaw-roll-heading-hold`: cascade heading hold into roll damper into yaw damper
+
+If you run `python_client.cli.run_yaw_damper` without one of these flags, it defaults to `--yaw-damper`. The combined `run_all` command only enables control when one of the mode flags is present.
 
 ```bash
 python3 -m python_client.cli.run_yaw_damper --hz 10 --yaw-damper-gain 1.0
@@ -154,28 +178,50 @@ Installed script form:
 python-client-run-yaw-damper --hz 10 --yaw-damper-gain 1.0
 ```
 
-To target a nonzero yaw rate, pass `--desired-yaw-rate-rad-s`:
+To target a nonzero yaw rate in yaw-damper-only mode, pass `--desired-yaw-rate-deg-s`:
 
 ```bash
-python3 -m python_client.cli.run_yaw_damper --hz 10 --yaw-damper-gain 1.0 --desired-yaw-rate-rad-s 0.05
+python3 -m python_client.cli.run_yaw_damper --yaw-damper --hz 10 --yaw-damper-gain 1.0 --desired-yaw-rate-deg-s 5.0
+```
+
+To run the yaw-plus-roll cascade:
+
+```bash
+python3 -m python_client.cli.run_yaw_damper --yaw-roll-damper --hz 10 --yaw-damper-gain 9.0 --roll-damper-gain 0.05 --desired-roll-rate-deg-s 0.0
+```
+
+To run the full heading-hold -> roll-damper -> yaw-damper cascade:
+
+```bash
+python3 -m python_client.cli.run_yaw_damper --yaw-roll-heading-hold --hz 10 --yaw-damper-gain 9.0 --roll-damper-gain 0.05 --heading-hold-gain 0.35 --target-heading-deg 0.0
 ```
 
 Options:
-- `--yaw-damper-gain`: proportional gain for the yaw-damper controller
-- `--desired-yaw-rate-rad-s`: desired yaw rate in radians per second. `0.0` means drive yaw rate toward zero.
+- `--yaw-damper-gain`: proportional gain for the yaw-damper block
+- `--roll-damper-gain`: proportional gain for the roll-damper block
+- `--heading-hold-gain`: proportional gain for the heading-hold block
+- `--desired-yaw-rate-deg-s`: desired yaw-rate signal in degrees per second for yaw-damper-only mode. `0.0` means drive yaw rate toward zero.
+- `--desired-roll-rate-deg-s`: desired roll-rate signal in degrees per second for yaw-plus-roll mode
+- `--target-heading-deg`: target heading for the full three-block cascade
 
-### 6. Run plotting, recording, terminal output, and yaw damper together
+### 7. Run plotting, recording, terminal output, and the controller together
 
-This is the recommended way to plot telemetry and apply the yaw damper concurrently, because everything shares one X-Plane client and one `RPOS` stream.
+This is the recommended way to plot telemetry and apply the controller concurrently, because everything shares one X-Plane client and one `RPOS` stream.
 
 ```bash
 python3 -m python_client.cli.run_all --hz 10 --history-seconds 60 --yaw-damper
 ```
 
-To use the same desired-yaw-rate setting in the combined runner:
+To use the yaw-plus-roll mode:
 
 ```bash
-python3 -m python_client.cli.run_all --hz 10 --history-seconds 60 --yaw-damper --desired-yaw-rate-rad-s 0.05
+python3 -m python_client.cli.run_all --hz 10 --history-seconds 60 --yaw-roll-damper --yaw-damper-gain 9.0 --roll-damper-gain 0.05
+```
+
+To use the full heading-hold cascade:
+
+```bash
+python3 -m python_client.cli.run_all --hz 10 --history-seconds 60 --yaw-roll-heading-hold --yaw-damper-gain 9.0 --roll-damper-gain 0.05 --heading-hold-gain 0.35 --target-heading-deg 0.0
 ```
 
 ## Running Without Installing
@@ -197,6 +243,10 @@ PYTHONPATH=src python3 -m python_client.cli.plot_live --hz 10 --history-seconds 
 ```
 
 ```bash
+PYTHONPATH=src python3 -m python_client.cli.plot_recording artifacts/session-20260402-120000.csv --hz 10
+```
+
+```bash
 PYTHONPATH=src python3 -m python_client.cli.run_all --hz 10 --history-seconds 60
 ```
 
@@ -209,10 +259,11 @@ The current package lives under `src/python_client/`:
 - `python_client.cli.run_client`: stream live telemetry in the terminal
 - `python_client.cli.record_session`: record telemetry to CSV
 - `python_client.cli.plot_live`: open a live telemetry plot
-- `python_client.cli.run_all`: run terminal output, CSV recording, and live plotting together
-- `python_client.cli.run_yaw_damper`: run the migrated yaw damper controller
+- `python_client.cli.plot_recording`: open offline plots for a recorded CSV session
+- `python_client.cli.run_all`: run terminal output, CSV recording, live plotting, and optional controller modes together
+- `python_client.cli.run_yaw_damper`: run the migrated controller modes against a live X-Plane stream
 - `python_client.xplane`: X-Plane discovery, UDP socket handling, and packet parsing
-- `python_client.control`: controller logic modules including heading hold and yaw damper
+- `python_client.control`: controller blocks including heading hold, roll damper, yaw damper, and the master controller
 - `python_client.logging`: telemetry recording helpers
 - `python_client.plotting`: live and offline plotting helpers
 - `python_client.models`: shared typed data structures
@@ -272,4 +323,4 @@ python3 -m pip install -e '.[plots]'
 - enters its own infinite loop
 - owns the process until interrupted
 
-That means one command cannot also run the others unless there is an orchestrator that reads one telemetry stream and dispatches each sample to multiple outputs. `python_client.cli.run_all` is that combined entry point, and the new `--yaw-damper` option extends that same pattern to closed-loop control.
+That means one command cannot also run the others unless there is an orchestrator that reads one telemetry stream and dispatches each sample to multiple outputs. `python_client.cli.run_all` is that combined entry point, and the control-mode flags extend that same pattern to closed-loop control.

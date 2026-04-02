@@ -25,8 +25,8 @@ def test_format_state_line() -> None:
     assert "Heading:" in line
     assert "Roll:" in line
     assert "Aileron Cmd: n/a" in line
-    assert "Elevator Cmd: n/a" in line
-    assert "Rudder Cmd: n/a" in line
+    assert "q: +0.0000 rad/s" in line
+    assert "r: +0.0000 rad/s" in line
 
 
 def test_format_state_line_includes_control_commands() -> None:
@@ -52,5 +52,5 @@ def test_format_state_line_includes_control_commands() -> None:
     )
 
     assert "Aileron Cmd: +0.100" in line
-    assert "Elevator Cmd: -0.200" in line
-    assert "Rudder Cmd: +0.300" in line
+    assert "q: +0.0000 rad/s" in line
+    assert "r: +0.0000 rad/s" in line

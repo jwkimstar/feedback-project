@@ -1,4 +1,6 @@
-from python_client.models import AircraftState
+from math import degrees
+
+from python_client.models import AircraftState, ControlCommand
 
 
 CSV_HEADER = [
@@ -12,13 +14,28 @@ CSV_HEADER = [
     "vx_east",
     "vy_up",
     "vz_south",
-    "p_rad_s",
-    "q_rad_s",
-    "r_rad_s",
+    "p_deg_s",
+    "q_deg_s",
+    "r_deg_s",
+    "aileron_cmd",
+    "elevator_cmd",
+    "rudder_cmd",
 ]
 
 
-def sample_to_row(state: AircraftState) -> list[float]:
+def _command_value(value: float | None) -> float | str:
+    return "" if value is None else value
+
+
+def _deg_per_second(value_rad_s: float) -> float:
+    return degrees(value_rad_s)
+
+
+def sample_to_row(
+    state: AircraftState,
+    command: ControlCommand | None = None,
+) -> list[float | str]:
+    command = command or ControlCommand()
     return [
         state.lon_deg,
         state.lat_deg,
@@ -30,7 +47,10 @@ def sample_to_row(state: AircraftState) -> list[float]:
         state.vx_east,
         state.vy_up,
         state.vz_south,
-        state.p_rad_s,
-        state.q_rad_s,
-        state.r_rad_s,
+        _deg_per_second(state.p_rad_s),
+        _deg_per_second(state.q_rad_s),
+        _deg_per_second(state.r_rad_s),
+        _command_value(command.aileron),
+        _command_value(command.elevator),
+        _command_value(command.rudder),
     ]

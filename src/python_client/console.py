@@ -1,3 +1,4 @@
+from math import degrees
 from typing import Protocol
 
 from python_client.models import AircraftState, ControlCommand
@@ -12,6 +13,10 @@ def _format_command_value(value: float | None) -> str:
     return "n/a" if value is None else f"{value:+.3f}"
 
 
+def _format_rate_deg_s(value_rad_s: float) -> str:
+    return f"{degrees(value_rad_s):+.4f}"
+
+
 def format_state_line(
     state: AircraftState,
     command: ControlCommand | None = None,
@@ -22,8 +27,8 @@ def format_state_line(
         f"Heading: {state.heading_deg:8.3f} deg | "
         f"Roll: {state.roll_deg:8.3f} deg | "
         f"Aileron Cmd: {_format_command_value(command.aileron)} | "
-        f"Elevator Cmd: {_format_command_value(command.elevator)} | "
-        f"Rudder Cmd: {_format_command_value(command.rudder)}"
+        f"q: {_format_rate_deg_s(state.q_rad_s)} deg/s | "
+        f"r: {_format_rate_deg_s(state.r_rad_s)} deg/s"
     )
 
 

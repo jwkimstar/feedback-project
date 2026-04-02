@@ -1,4 +1,5 @@
 from collections import deque
+from math import degrees
 from time import monotonic
 
 from python_client.console import ControlCommandProvider
@@ -29,25 +30,34 @@ class LivePlotter:
         self.aileron_commands = deque(maxlen=max_points)
         self.elevator_commands = deque(maxlen=max_points)
         self.rudder_commands = deque(maxlen=max_points)
+        self.p_values = deque(maxlen=max_points)
+        self.q_values = deque(maxlen=max_points)
+        self.r_values = deque(maxlen=max_points)
         self.command_provider = command_provider
 
-        self.fig, axes = plt.subplots(2, 3, sharex=True, figsize=(14, 8))
+        self.fig, axes = plt.subplots(3, 3, sharex=True, figsize=(15, 10))
         self.axes = axes.flatten()
         self.lines = [
-            self.axes[0].plot([], [], label="Pitch (deg)")[0],
-            self.axes[1].plot([], [], label="Heading (deg)")[0],
-            self.axes[2].plot([], [], label="Roll (deg)")[0],
+            self.axes[0].plot([], [], label="Roll (deg)")[0],
+            self.axes[1].plot([], [], label="Pitch (deg)")[0],
+            self.axes[2].plot([], [], label="Yaw / Heading (deg)")[0],
             self.axes[3].plot([], [], label="Aileron Cmd")[0],
             self.axes[4].plot([], [], label="Elevator Cmd")[0],
             self.axes[5].plot([], [], label="Rudder Cmd")[0],
+            self.axes[6].plot([], [], label="p (deg/s)")[0],
+            self.axes[7].plot([], [], label="q (deg/s)")[0],
+            self.axes[8].plot([], [], label="r (deg/s)")[0],
         ]
         labels = [
-            "Pitch (deg)",
-            "Heading (deg)",
             "Roll (deg)",
+            "Pitch (deg)",
+            "Yaw / Heading (deg)",
             "Aileron Cmd",
             "Elevator Cmd",
             "Rudder Cmd",
+            "p (deg/s)",
+            "q (deg/s)",
+            "r (deg/s)",
         ]
 
         for axis, label in zip(self.axes, labels, strict=True):
@@ -55,7 +65,7 @@ class LivePlotter:
             axis.grid(True, alpha=0.3)
             axis.legend(loc="upper left")
 
-        for axis in self.axes[3:]:
+        for axis in self.axes[6:]:
             axis.set_xlabel("Elapsed time (s)")
         self.fig.suptitle("X-Plane Telemetry")
         plt.ion()
@@ -65,21 +75,27 @@ class LivePlotter:
     def handle_state(self, state: AircraftState) -> None:
         elapsed = monotonic() - self.start_time
         self.timestamps.append(elapsed)
+        self.roll_values.append(state.roll_deg)
         self.pitch_values.append(state.pitch_deg)
         self.heading_values.append(state.heading_deg)
-        self.roll_values.append(state.roll_deg)
         command = self._latest_command()
         self.aileron_commands.append(self._command_value(command.aileron))
         self.elevator_commands.append(self._command_value(command.elevator))
         self.rudder_commands.append(self._command_value(command.rudder))
+        self.p_values.append(degrees(state.p_rad_s))
+        self.q_values.append(degrees(state.q_rad_s))
+        self.r_values.append(degrees(state.r_rad_s))
 
         series = [
+            self.roll_values,
             self.pitch_values,
             self.heading_values,
-            self.roll_values,
             self.aileron_commands,
             self.elevator_commands,
             self.rudder_commands,
+            self.p_values,
+            self.q_values,
+            self.r_values,
         ]
         for axis, line, values in zip(self.axes, self.lines, series, strict=True):
             line.set_data(self.timestamps, values)

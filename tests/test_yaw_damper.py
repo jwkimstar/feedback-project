@@ -26,7 +26,7 @@ def make_state(yaw_rate: float) -> AircraftState:
 def test_yaw_damper_preserves_legacy_proportional_law() -> None:
     controller = YawDamperController(YawDamperGains(proportional_gain=2.0))
 
-    command = controller.compute(make_state(0.25), desired_yaw_rate_rad_s=0.1)
+    command = controller.compute(make_state(0.25), signal=0.1)
 
     assert command == ControlCommand(aileron=0.3)
 
@@ -34,7 +34,7 @@ def test_yaw_damper_preserves_legacy_proportional_law() -> None:
 def test_yaw_damper_clips_to_valid_command_range() -> None:
     controller = YawDamperController(YawDamperGains(proportional_gain=10.0))
 
-    command = controller.compute(make_state(0.5), desired_yaw_rate_rad_s=0.0)
+    command = controller.compute(make_state(0.5), signal=0.0)
 
     assert command == ControlCommand(aileron=1.0)
 

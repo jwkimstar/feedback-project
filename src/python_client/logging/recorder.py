@@ -1,14 +1,24 @@
 import csv
 from pathlib import Path
-from typing import TextIO
+from typing import Protocol, TextIO
 
 from python_client.logging.schema import CSV_HEADER, sample_to_row
-from python_client.models import AircraftState
+from python_client.models import AircraftState, ControlCommand
+
+
+class ControlCommandProvider(Protocol):
+    def get_latest_command(self) -> ControlCommand | None:
+        """Return the most recent control command, if one exists."""
 
 
 class SessionRecorder:
-    def __init__(self, output_path: str | Path) -> None:
+    def __init__(
+        self,
+        output_path: str | Path,
+        command_provider: ControlCommandProvider | None = None,
+    ) -> None:
         self.output_path = Path(output_path)
+        self.command_provider = command_provider
         self._handle: TextIO | None = None
         self._writer: csv.writer | None = None
 
@@ -25,7 +35,10 @@ class SessionRecorder:
     def write(self, state: AircraftState) -> None:
         if self._writer is None:
             raise RuntimeError("SessionRecorder must be entered before writing.")
-        self._writer.writerow(sample_to_row(state))
+        command = None
+        if self.command_provider is not None:
+            command = self.command_provider.get_latest_command()
+        self._writer.writerow(sample_to_row(state, command))
 
     def handle_state(self, state: AircraftState) -> None:
         self.write(state)

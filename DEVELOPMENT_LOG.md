@@ -137,3 +137,49 @@ The project is still centered on a `src/python_client/` package for X-Plane tele
 - The packaged runtime can ingest and fan out telemetry, but it still does not send actuator commands back to X-Plane.
 - Controller prototypes exist, but they are not yet wired into a closed-loop execution path.
 - `actual_code.py` is still the only in-repo implementation that demonstrates direct control-command transmission, so it remains relevant reference material until that path is migrated into `src/python_client/`.
+
+## 2026-04-02
+
+### Summary
+
+Migrated the cascaded prototype controller structure from `actual_code.py` into the packaged control system and exposed CLI flags for selecting how many control blocks are active.
+
+The new packaged control path now supports three modes that mirror the prototype chain depth: yaw damper only, yaw damper plus roll damper, and heading hold plus roll damper plus yaw damper. Both the dedicated control runner and the combined telemetry runner can now activate those modes without opening multiple competing X-Plane telemetry subscriptions.
+
+### Added
+
+- `src/python_client/control/legacy_heading_hold.py`
+  - Added the simple proportional heading-hold block preserved from `actual_code.py`.
+- `src/python_client/control/roll_damper.py`
+  - Added the simple proportional roll-damper block preserved from `actual_code.py`.
+- `src/python_client/control/master_controller.py`
+  - Added the cascaded controller, control modes, and a handler that emits the final aileron command.
+- `src/python_client/cli/control_options.py`
+  - Added shared CLI argument wiring for the three mutually exclusive control-mode flags and their gains/targets.
+- `tests/test_master_controller.py`
+  - Added regression tests for the three-block controller chain and its individual block formulas.
+
+### Modified
+
+- `src/python_client/control/yaw_damper.py`
+  - Refactored the yaw-damper block to accept a generic upstream signal so it can sit at the end of the cascade.
+- `src/python_client/control/__init__.py`
+  - Exported the new block controllers, master controller, and mode types.
+- `src/python_client/cli/run_yaw_damper.py`
+  - Reworked the dedicated controller runner to use the packaged master controller and support `--yaw-damper`, `--yaw-roll-damper`, and `--yaw-roll-heading-hold`.
+- `src/python_client/cli/run_all.py`
+  - Reworked the combined runner to accept the same control-mode flags and drive the master controller in the same process as plotting, logging, and console output.
+- `README.md`
+  - Documented the new control modes and updated usage examples.
+- `tests/test_yaw_damper.py`
+  - Updated the yaw-damper regression tests to match the refactored controller interface.
+
+### Verification
+
+- `PYTHONPYCACHEPREFIX=/tmp/codex-pycache python3 -m compileall src tests`
+
+### Next Step Ideas
+
+- Decide whether the legacy proportional heading-hold block should remain separate from the more advanced packaged `HeadingHoldController`, or whether the advanced controller should eventually replace it in the master cascade.
+- Add optional plotting of intermediate block outputs so heading-hold and roll-damper signals can be inspected alongside the final aileron command.
+- Add parser or integration tests for the new control-mode flags once a Python 3.11 test environment is available.
