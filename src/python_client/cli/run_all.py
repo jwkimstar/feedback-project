@@ -54,7 +54,7 @@ def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     output_path = args.output or default_output_path()
     handlers = []
-    mode, gains, targets = build_master_controller(args)
+    mode, gains, targets, controller_types = build_master_controller(args)
 
     try:
         with trap_sigint() as should_stop:
@@ -68,6 +68,7 @@ def main(argv: list[str] | None = None) -> int:
                             mode=mode,
                             gains=gains,
                             targets=targets,
+                            controller_types=controller_types,
                         ),
                     )
                     command_provider = master_handler

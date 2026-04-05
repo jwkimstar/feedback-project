@@ -2,6 +2,7 @@ import argparse
 from math import radians
 
 from python_client.control import (
+    MasterControllerControllerTypes,
     MasterControllerGains,
     MasterControllerMode,
     MasterControllerTargets,
@@ -42,16 +43,52 @@ def add_master_controller_arguments(
         help="Proportional gain used by the yaw-damper block.",
     )
     parser.add_argument(
+        "--yaw-damper-integral-gain",
+        type=float,
+        default=MasterControllerGains.yaw_damper_integral_gain,
+        help="Integral gain used by the yaw-damper block when PI mode is selected.",
+    )
+    parser.add_argument(
         "--roll-damper-gain",
         type=float,
         default=MasterControllerGains.roll_damper_gain,
         help="Proportional gain used by the roll-damper block.",
     )
     parser.add_argument(
+        "--roll-damper-integral-gain",
+        type=float,
+        default=MasterControllerGains.roll_damper_integral_gain,
+        help="Integral gain used by the roll-damper block when PI mode is selected.",
+    )
+    parser.add_argument(
+        "--yaw-controller-type",
+        choices=("p", "pi"),
+        default=MasterControllerControllerTypes.yaw_damper,
+        help="Choose the yaw-damper controller type.",
+    )
+    parser.add_argument(
+        "--roll-controller-type",
+        choices=("p", "pi"),
+        default=MasterControllerControllerTypes.roll_damper,
+        help="Choose the roll-damper controller type.",
+    )
+    parser.add_argument(
+        "--heading-controller-type",
+        choices=("p", "pi"),
+        default=MasterControllerControllerTypes.heading_hold,
+        help="Choose the heading-hold controller type.",
+    )
+    parser.add_argument(
         "--heading-hold-gain",
         type=float,
         default=MasterControllerGains.heading_hold_gain,
         help="Proportional gain used by the heading-hold block.",
+    )
+    parser.add_argument(
+        "--heading-hold-integral-gain",
+        type=float,
+        default=MasterControllerGains.heading_hold_integral_gain,
+        help="Integral gain used by the heading-hold block when PI mode is selected.",
     )
     parser.add_argument(
         "--desired-yaw-rate-deg-s",
@@ -75,19 +112,32 @@ def add_master_controller_arguments(
 
 def build_master_controller(
     args: argparse.Namespace,
-) -> tuple[MasterControllerMode | None, MasterControllerGains, MasterControllerTargets]:
+) -> tuple[
+    MasterControllerMode | None,
+    MasterControllerGains,
+    MasterControllerTargets,
+    MasterControllerControllerTypes,
+]:
     mode = None
     if args.control_mode is not None:
         mode = MasterControllerMode(args.control_mode)
 
     gains = MasterControllerGains(
         yaw_damper_gain=args.yaw_damper_gain,
+        yaw_damper_integral_gain=args.yaw_damper_integral_gain,
         roll_damper_gain=args.roll_damper_gain,
+        roll_damper_integral_gain=args.roll_damper_integral_gain,
         heading_hold_gain=args.heading_hold_gain,
+        heading_hold_integral_gain=args.heading_hold_integral_gain,
     )
     targets = MasterControllerTargets(
         desired_yaw_rate_rad_s=radians(args.desired_yaw_rate_deg_s),
         desired_roll_rate_rad_s=radians(args.desired_roll_rate_deg_s),
         target_heading_deg=args.target_heading_deg,
     )
-    return mode, gains, targets
+    controller_types = MasterControllerControllerTypes(
+        yaw_damper=args.yaw_controller_type,
+        roll_damper=args.roll_controller_type,
+        heading_hold=args.heading_controller_type,
+    )
+    return mode, gains, targets, controller_types

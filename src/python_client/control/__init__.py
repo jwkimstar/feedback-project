@@ -2,6 +2,7 @@ from .heading_hold import HeadingHoldController, HeadingHoldGains
 from .legacy_heading_hold import LegacyHeadingHoldController, LegacyHeadingHoldGains
 from .master_controller import (
     MasterController,
+    MasterControllerControllerTypes,
     MasterControllerGains,
     MasterControllerHandler,
     MasterControllerMode,
@@ -16,6 +17,7 @@ __all__ = [
     "LegacyHeadingHoldController",
     "LegacyHeadingHoldGains",
     "MasterController",
+    "MasterControllerControllerTypes",
     "MasterControllerGains",
     "MasterControllerHandler",
     "MasterControllerMode",
