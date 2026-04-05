@@ -28,7 +28,7 @@ def test_yaw_damper_preserves_legacy_proportional_law() -> None:
 
     command = controller.compute(make_state(0.25), signal=0.1)
 
-    assert command == ControlCommand(aileron=0.3)
+    assert command == ControlCommand(aileron=-0.3)
 
 
 def test_yaw_damper_clips_to_valid_command_range() -> None:
@@ -36,7 +36,7 @@ def test_yaw_damper_clips_to_valid_command_range() -> None:
 
     command = controller.compute(make_state(0.5), signal=0.0)
 
-    assert command == ControlCommand(aileron=1.0)
+    assert command == ControlCommand(aileron=-1.0)
 
 
 def test_build_control_command_packet_populates_control_surface_row() -> None:

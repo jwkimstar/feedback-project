@@ -4,7 +4,7 @@ from time import monotonic
 
 from python_client.console import ControlCommandProvider
 from python_client.models import AircraftState, ControlCommand
-from python_client.runtime import close_handlers, stream_to_handlers
+from python_client.runtime import StopRequested, close_handlers, stream_to_handlers
 
 
 class LivePlotter:
@@ -34,6 +34,8 @@ class LivePlotter:
         self.q_values = deque(maxlen=max_points)
         self.r_values = deque(maxlen=max_points)
         self.command_provider = command_provider
+        self.min_draw_interval_s = 1 / max(1, min(hz, 5))
+        self._last_draw_time = float("-inf")
 
         self.fig, axes = plt.subplots(3, 3, sharex=True, figsize=(15, 10))
         self.axes = axes.flatten()
@@ -73,6 +75,9 @@ class LivePlotter:
         self.start_time = monotonic()
 
     def handle_state(self, state: AircraftState) -> None:
+        if not self.plt.fignum_exists(self.fig.number):
+            raise StopRequested
+
         elapsed = monotonic() - self.start_time
         self.timestamps.append(elapsed)
         self.roll_values.append(state.roll_deg)
@@ -97,11 +102,16 @@ class LivePlotter:
             self.q_values,
             self.r_values,
         ]
+
+        if elapsed - self._last_draw_time < self.min_draw_interval_s:
+            return
+
         for axis, line, values in zip(self.axes, self.lines, series, strict=True):
             line.set_data(self.timestamps, values)
             axis.relim()
             axis.autoscale_view()
 
+        self._last_draw_time = elapsed
         self.fig.canvas.draw_idle()
         self.fig.canvas.flush_events()
         self.plt.pause(0.001)

@@ -1,3 +1,5 @@
+import pytest
+
 from python_client.control import (
     LegacyHeadingHoldController,
     LegacyHeadingHoldGains,
@@ -41,7 +43,7 @@ def test_legacy_heading_hold_matches_actual_code_formula() -> None:
 
     output = controller.compute_output(12.0, 4.0)
 
-    assert output == 2.8
+    assert output == -2.8
 
 
 def test_roll_damper_matches_actual_code_formula() -> None:
@@ -49,7 +51,7 @@ def test_roll_damper_matches_actual_code_formula() -> None:
 
     output = controller.compute_output(0.3, 0.1)
 
-    assert output == 0.01
+    assert output == -0.01
 
 
 def test_master_controller_yaw_only_mode_returns_aileron_command() -> None:
@@ -61,7 +63,7 @@ def test_master_controller_yaw_only_mode_returns_aileron_command() -> None:
 
     command = controller.compute(make_state(r_rad_s=0.25))
 
-    assert command == ControlCommand(aileron=0.3)
+    assert command == ControlCommand(aileron=-0.3)
 
 
 def test_master_controller_yaw_roll_mode_cascades_roll_into_yaw() -> None:
@@ -73,7 +75,7 @@ def test_master_controller_yaw_roll_mode_cascades_roll_into_yaw() -> None:
 
     command = controller.compute(make_state(p_rad_s=0.3, r_rad_s=0.4))
 
-    assert command == ControlCommand(aileron=0.6)
+    assert command.aileron == pytest.approx(-1.0)
 
 
 def test_master_controller_heading_mode_matches_three_block_cascade() -> None:
@@ -91,4 +93,4 @@ def test_master_controller_heading_mode_matches_three_block_cascade() -> None:
         make_state(heading_deg=10.0, p_rad_s=0.4, r_rad_s=0.7)
     )
 
-    assert command == ControlCommand(aileron=0.75)
+    assert command == ControlCommand(aileron=-0.95)

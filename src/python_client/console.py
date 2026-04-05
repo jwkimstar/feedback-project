@@ -1,4 +1,5 @@
 from math import degrees
+import sys
 from typing import Protocol
 
 from python_client.models import AircraftState, ControlCommand
@@ -17,6 +18,10 @@ def _format_rate_deg_s(value_rad_s: float) -> str:
     return f"{degrees(value_rad_s):+.4f}"
 
 
+def _normalize_heading_deg(value_deg: float) -> float:
+    return value_deg % 360.0
+
+
 def format_state_line(
     state: AircraftState,
     command: ControlCommand | None = None,
@@ -24,7 +29,7 @@ def format_state_line(
     command = command or ControlCommand()
     return (
         f"Pitch: {state.pitch_deg:8.3f} deg | "
-        f"Heading: {state.heading_deg:8.3f} deg | "
+        f"Heading: {_normalize_heading_deg(state.heading_deg):8.3f} deg | "
         f"Roll: {state.roll_deg:8.3f} deg | "
         f"Aileron Cmd: {_format_command_value(command.aileron)} | "
         f"q: {_format_rate_deg_s(state.q_rad_s)} deg/s | "
@@ -40,12 +45,20 @@ class TelemetryPrinter:
         command_provider: ControlCommandProvider | None = None,
     ) -> None:
         self.command_provider = command_provider
+        self._last_line_length = 0
 
     def handle_state(self, state: AircraftState) -> None:
         command = None
         if self.command_provider is not None:
             command = self.command_provider.get_latest_command()
-        print(format_state_line(state, command))
+        line = format_state_line(state, command)
+        padding = max(0, self._last_line_length - len(line))
+        sys.stdout.write(f"\r{line}{' ' * padding}")
+        sys.stdout.flush()
+        self._last_line_length = len(line)
 
     def close(self) -> None:
-        return None
+        if self._last_line_length:
+            sys.stdout.write("\n")
+            sys.stdout.flush()
+            self._last_line_length = 0

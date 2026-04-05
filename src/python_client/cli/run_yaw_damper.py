@@ -3,7 +3,7 @@ import argparse
 from python_client.cli.control_options import add_master_controller_arguments, build_master_controller
 from python_client.config import DEFAULT_NETWORK_CONFIG
 from python_client.control import MasterController, MasterControllerHandler, MasterControllerMode
-from python_client.runtime import close_handlers, run_client_to_handlers
+from python_client.runtime import StopRequested, close_handlers, run_client_to_handlers, trap_sigint
 from python_client.xplane.client import XPlaneClient
 from python_client.xplane.exceptions import XPlaneIpNotFound
 
@@ -35,24 +35,25 @@ def main(argv: list[str] | None = None) -> int:
     mode = mode or MasterControllerMode.YAW_DAMPER
 
     try:
-        with XPlaneClient.discover(wait=args.wait, hz=args.hz) as client:
-            print("Found X-Plane:")
-            print(f"  Hostname: {client.beacon.hostname}")
-            print(f"  IP:       {client.beacon.ip}")
-            print(f"  UDP port: {client.beacon.port}")
-            print(f"  Version:  {client.beacon.xplane_version}")
-            print()
+        with trap_sigint() as should_stop:
+            with XPlaneClient.discover(wait=args.wait, hz=args.hz) as client:
+                print("Found X-Plane:")
+                print(f"  Hostname: {client.beacon.hostname}")
+                print(f"  IP:       {client.beacon.ip}")
+                print(f"  UDP port: {client.beacon.port}")
+                print(f"  Version:  {client.beacon.xplane_version}")
+                print()
 
-            controller = MasterController(mode=mode, gains=gains, targets=targets)
-            master_handler = MasterControllerHandler(
-                sender=client,
-                controller=controller,
-                print_status=True,
-            )
-            handlers = [master_handler]
-            print(f"Running control mode '{mode.value}'. Press Ctrl+C to stop.\n")
-            run_client_to_handlers(client, handlers)
-    except KeyboardInterrupt:
+                controller = MasterController(mode=mode, gains=gains, targets=targets)
+                master_handler = MasterControllerHandler(
+                    sender=client,
+                    controller=controller,
+                    print_status=True,
+                )
+                handlers = [master_handler]
+                print(f"Running control mode '{mode.value}'. Press Ctrl+C to stop.\n")
+                run_client_to_handlers(client, handlers, should_stop=should_stop)
+    except (KeyboardInterrupt, StopRequested):
         print("\nStopping...")
     except (TimeoutError, XPlaneIpNotFound) as exc:
         print(exc)

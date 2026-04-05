@@ -56,9 +56,15 @@ class XPlaneClient:
 
     def send_control_command(self, command: ControlCommand) -> None:
         packet = build_control_command_packet(command)
-        self.send_sock.sendto(packet, (self.beacon.ip, self.config.command_port))
+        command_port = self.config.command_port or self.beacon.port
+        self.send_sock.sendto(packet, (self.beacon.ip, command_port))
 
     def recv_state(self) -> AircraftState:
+        packet = self._recv_next_matching_rpos_packet()
+        packet = self._drain_pending_rpos_packets(packet)
+        return parse_rpos_packet(packet)
+
+    def _recv_next_matching_rpos_packet(self) -> bytes:
         while True:
             try:
                 packet, addr = self.sock.recvfrom(2048)
@@ -71,7 +77,23 @@ class XPlaneClient:
             if packet[:4] != b"RPOS":
                 continue
 
-            return parse_rpos_packet(packet)
+            return packet
+
+    def _drain_pending_rpos_packets(self, latest_packet: bytes) -> bytes:
+        original_timeout = self.sock.gettimeout()
+        self.sock.setblocking(False)
+        try:
+            while True:
+                packet, addr = self.sock.recvfrom(2048)
+                if addr[0] != self.beacon.ip:
+                    continue
+                if packet[:4] != b"RPOS":
+                    continue
+                latest_packet = packet
+        except (BlockingIOError, socket.timeout):
+            return latest_packet
+        finally:
+            self.sock.settimeout(original_timeout)
 
     def stream_states(self) -> Iterator[AircraftState]:
         while True:

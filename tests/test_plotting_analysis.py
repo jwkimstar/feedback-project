@@ -1,3 +1,5 @@
+from math import degrees
+
 from python_client.plotting.analysis import load_recording_series
 
 
@@ -19,7 +21,7 @@ def test_load_recording_series_builds_elapsed_time_and_values(tmp_path) -> None:
     assert series.time_s == [0.0, 0.5]
     assert series.roll_deg == [7.0, 17.0]
     assert series.pitch_deg == [5.0, 15.0]
-    assert series.heading_deg == [6.0, 16.0]
-    assert series.p_rad_s == [11.0, 21.0]
-    assert series.q_rad_s == [12.0, 22.0]
-    assert series.r_rad_s == [13.0, 23.0]
+    assert series.yaw_deg == [6.0, 16.0]
+    assert series.p_deg_s == [degrees(11.0), degrees(21.0)]
+    assert series.q_deg_s == [degrees(12.0), degrees(22.0)]
+    assert series.r_deg_s == [degrees(13.0), degrees(23.0)]

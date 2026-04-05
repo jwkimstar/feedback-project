@@ -25,8 +25,8 @@ def test_format_state_line() -> None:
     assert "Heading:" in line
     assert "Roll:" in line
     assert "Aileron Cmd: n/a" in line
-    assert "q: +0.0000 rad/s" in line
-    assert "r: +0.0000 rad/s" in line
+    assert "q: +0.0000 deg/s" in line
+    assert "r: +0.0000 deg/s" in line
 
 
 def test_format_state_line_includes_control_commands() -> None:
@@ -52,5 +52,27 @@ def test_format_state_line_includes_control_commands() -> None:
     )
 
     assert "Aileron Cmd: +0.100" in line
-    assert "q: +0.0000 rad/s" in line
-    assert "r: +0.0000 rad/s" in line
+    assert "q: +0.0000 deg/s" in line
+    assert "r: +0.0000 deg/s" in line
+
+
+def test_format_state_line_normalizes_heading_for_comparison() -> None:
+    state = AircraftState(
+        lon_deg=0.0,
+        lat_deg=0.0,
+        ele_m=0.0,
+        agl_m=0.0,
+        pitch_deg=0.0,
+        heading_deg=-90.0,
+        roll_deg=0.0,
+        vx_east=0.0,
+        vy_up=0.0,
+        vz_south=0.0,
+        p_rad_s=0.0,
+        q_rad_s=0.0,
+        r_rad_s=0.0,
+    )
+
+    line = format_state_line(state)
+
+    assert "Heading:  270.000 deg" in line
