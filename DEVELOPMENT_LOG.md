@@ -142,9 +142,11 @@ The project is still centered on a `src/python_client/` package for X-Plane tele
 
 ### Summary
 
-Migrated the cascaded prototype controller structure from `actual_code.py` into the packaged control system and exposed CLI flags for selecting how many control blocks are active.
+Migrated the prototype control path from `actual_code.py` into the packaged `python_client` control system, expanded the control stack into composable blocks, and updated the telemetry, plotting, recording, and CLI surfaces around that new control path.
 
-The new packaged control path now supports three modes that mirror the prototype chain depth: yaw damper only, yaw damper plus roll damper, and heading hold plus roll damper plus yaw damper. Both the dedicated control runner and the combined telemetry runner can now activate those modes without opening multiple competing X-Plane telemetry subscriptions.
+The packaged control path now supports three modes that mirror the prototype chain depth: yaw damper only, yaw damper plus roll damper, and heading hold plus roll damper plus yaw damper. Both the dedicated controller runner and the combined telemetry runner can activate those modes without opening multiple competing X-Plane telemetry subscriptions.
+
+During the same session, the logging and visualization paths were expanded so command outputs can be recorded and plotted, live plots were reworked into a multi-row layout, an offline CSV plotting tool was added, and the user-facing unit system was shifted to degrees / degrees-per-second while keeping controller internals in radians.
 
 ### Added
 
@@ -156,8 +158,14 @@ The new packaged control path now supports three modes that mirror the prototype
   - Added the cascaded controller, control modes, and a handler that emits the final aileron command.
 - `src/python_client/cli/control_options.py`
   - Added shared CLI argument wiring for the three mutually exclusive control-mode flags and their gains/targets.
+- `src/python_client/cli/plot_recording.py`
+  - Added an offline plotting entry point for post-simulation CSV review.
 - `tests/test_master_controller.py`
   - Added regression tests for the three-block controller chain and its individual block formulas.
+- `tests/test_logging_schema.py`
+  - Added coverage for the expanded CSV schema and optional command columns.
+- `tests/test_plotting_analysis.py`
+  - Added coverage for offline CSV loading and elapsed-time reconstruction.
 
 ### Modified
 
@@ -169,8 +177,31 @@ The new packaged control path now supports three modes that mirror the prototype
   - Reworked the dedicated controller runner to use the packaged master controller and support `--yaw-damper`, `--yaw-roll-damper`, and `--yaw-roll-heading-hold`.
 - `src/python_client/cli/run_all.py`
   - Reworked the combined runner to accept the same control-mode flags and drive the master controller in the same process as plotting, logging, and console output.
+- `src/python_client/plotting/realtime.py`
+  - Reworked the live plot layout to use a three-row figure:
+    - roll, pitch, yaw / heading
+    - commanded aileron, elevator, rudder
+    - `p`, `q`, `r`
+  - Converted displayed body rates from radians per second to degrees per second.
+- `src/python_client/plotting/analysis.py`
+  - Expanded offline CSV loading to include control-command traces and degree-based rate columns.
+  - Added post-simulation plotting for roll, pitch, yaw / heading, control commands, and `p/q/r` over elapsed time.
+- `src/python_client/logging/schema.py`
+  - Expanded the CSV schema to record `aileron_cmd`, `elevator_cmd`, and `rudder_cmd`.
+  - Converted recorded `p`, `q`, and `r` values from rad/s to deg/s in the stored CSV output.
+- `src/python_client/logging/recorder.py`
+  - Updated the recorder to pull the latest control command from the active controller so command traces are stored alongside telemetry.
+- `src/python_client/console.py`
+  - Updated terminal output to show commanded aileron plus `q` and `r`.
+  - Converted displayed rates from rad/s to deg/s.
+- `pyproject.toml`
+  - Added the installed script entry point for offline CSV plotting.
 - `README.md`
-  - Documented the new control modes and updated usage examples.
+  - Documented the new control modes, the degree-based CLI flags, and the offline plotting workflow.
+- `DEVELOPMENT_LOG.md`
+  - Updated this session summary to reflect the full scope of the control, logging, plotting, and unit-conversion work.
+- `tests/test_console.py`
+  - Updated console expectations around the current telemetry / command display format.
 - `tests/test_yaw_damper.py`
   - Updated the yaw-damper regression tests to match the refactored controller interface.
 
@@ -180,6 +211,6 @@ The new packaged control path now supports three modes that mirror the prototype
 
 ### Next Step Ideas
 
-- Decide whether the legacy proportional heading-hold block should remain separate from the more advanced packaged `HeadingHoldController`, or whether the advanced controller should eventually replace it in the master cascade.
-- Add optional plotting of intermediate block outputs so heading-hold and roll-damper signals can be inspected alongside the final aileron command.
-- Add parser or integration tests for the new control-mode flags once a Python 3.11 test environment is available.
+- Check radians-to-degrees conversion across the CLI input path, CSV output, console output, and both plotting paths.
+- Tune the yaw-roll damping path against live simulation data.
+- Verify the full yaw-roll-heading controller mode in simulation and confirm the chained block behavior matches intent.
