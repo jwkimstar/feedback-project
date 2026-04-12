@@ -11,7 +11,6 @@ class YawDamperGains:
     proportional_gain: float = 1.0
     integral_gain: float = 0.15
     integral_limit: float = 1.0
-    anti_windup_gain: float = 1.0
     min_aileron: float = -1.0
     max_aileron: float = 1.0
 
@@ -26,13 +25,7 @@ class YawDamperController:
 
     def __init__(self, gains: YawDamperGains | None = None) -> None:
         self.gains = gains or YawDamperGains()
-        self._integral_term = 0.0
-
-    def _clamp_aileron(self, aileron: float) -> float:
-        return max(self.gains.min_aileron, min(self.gains.max_aileron, aileron))
-
-    def _clamp_integral_term(self, integral_term: float) -> float:
-        return max(-self.gains.integral_limit, min(self.gains.integral_limit, integral_term))
+        self._integral_error = 0.0
 
     def compute_output_p(
         self,
@@ -40,7 +33,7 @@ class YawDamperController:
         signal: float = 0.0,
     ) -> float:
         aileron = self.gains.proportional_gain * (signal - current_yaw_rate_rad_s)
-        return self._clamp_aileron(aileron)
+        return max(self.gains.min_aileron, min(self.gains.max_aileron, aileron))
 
     def compute_output(
         self,
@@ -56,21 +49,17 @@ class YawDamperController:
         dt_s: float = 0.0,
     ) -> float:
         error = signal - current_yaw_rate_rad_s
-        proportional_term = self.gains.proportional_gain * error
-        integral_term = self._integral_term
-
         if dt_s > 0.0:
-            integral_term += self.gains.integral_gain * error * dt_s
-            unsaturated_aileron = proportional_term + integral_term
-            saturated_aileron = self._clamp_aileron(unsaturated_aileron)
-            integral_term += self.gains.anti_windup_gain * (
-                saturated_aileron - unsaturated_aileron
+            self._integral_error += error * dt_s
+            self._integral_error = max(
+                -self.gains.integral_limit,
+                min(self.gains.integral_limit, self._integral_error),
             )
-            integral_term = self._clamp_integral_term(integral_term)
-            self._integral_term = integral_term
-
-        aileron = proportional_term + self._integral_term
-        return self._clamp_aileron(aileron)
+        aileron = (
+            self.gains.proportional_gain * error
+            + self.gains.integral_gain * self._integral_error
+        )
+        return max(self.gains.min_aileron, min(self.gains.max_aileron, aileron))
 
     def compute(
         self,
@@ -86,7 +75,7 @@ class YawDamperController:
         return ControlCommand(aileron=aileron)
 
     def reset(self) -> None:
-        self._integral_term = 0.0
+        self._integral_error = 0.0
 
 
 class YawDamperHandler:

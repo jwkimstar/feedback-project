@@ -28,7 +28,6 @@ class MasterControllerGains:
     yaw_damper_gain: float = 2.0
     yaw_damper_integral_gain: float = 0.15
     yaw_damper_integral_limit: float = 1.0
-    yaw_damper_anti_windup_gain: float = 1.0
     roll_damper_gain: float = 0.5
     roll_damper_integral_gain: float = 0.02
     roll_damper_integral_limit: float = 1.0
@@ -78,7 +77,6 @@ class MasterController:
                 proportional_gain=self.gains.yaw_damper_gain,
                 integral_gain=self.gains.yaw_damper_integral_gain,
                 integral_limit=self.gains.yaw_damper_integral_limit,
-                anti_windup_gain=self.gains.yaw_damper_anti_windup_gain,
             )
         )
         self.roll_damper = RollDamperController(

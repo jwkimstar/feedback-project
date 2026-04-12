@@ -147,26 +147,6 @@ def test_master_controller_reset_clears_integral_state() -> None:
     assert reset.aileron == pytest.approx(0.0)
 
 
-def test_master_controller_yaw_pi_uses_back_calculation_when_saturated() -> None:
-    controller = MasterController(
-        mode=MasterControllerMode.YAW_DAMPER,
-        gains=MasterControllerGains(
-            yaw_damper_gain=10.0,
-            yaw_damper_integral_gain=1.0,
-            yaw_damper_integral_limit=10.0,
-            yaw_damper_anti_windup_gain=1.0,
-        ),
-        controller_types=MasterControllerControllerTypes(yaw_damper="pi"),
-    )
-
-    first = controller.compute(make_state(r_rad_s=0.2), dt_s=1.0)
-    second = controller.compute(make_state(r_rad_s=0.2), dt_s=1.0)
-
-    assert first.aileron == pytest.approx(-1.0)
-    assert second.aileron == pytest.approx(-1.0)
-    assert controller.yaw_damper._integral_term == pytest.approx(1.0)
-
-
 def test_master_controller_heading_mode_matches_three_block_cascade() -> None:
     controller = MasterController(
         mode=MasterControllerMode.YAW_ROLL_HEADING_HOLD,
