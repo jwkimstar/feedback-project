@@ -1,7 +1,8 @@
 from dataclasses import dataclass
 from enum import Enum
 from math import degrees
-from typing import Protocol
+from time import monotonic
+from typing import Literal, Protocol
 
 from python_client.control.legacy_heading_hold import (
     LegacyHeadingHoldController,
@@ -22,12 +23,20 @@ class MasterControllerMode(str, Enum):
     YAW_ROLL_DAMPER = "yaw-roll-damper"
     YAW_ROLL_HEADING_HOLD = "yaw-roll-heading-hold"
 
+ControllerType = Literal["p", "pi"]
+
 
 @dataclass(frozen=True)
 class MasterControllerGains:
     yaw_damper_gain: float = 2.0
+    yaw_damper_integral_gain: float = 0.15
+    yaw_damper_integral_limit: float = 1.0
     roll_damper_gain: float = 0.5
-    heading_hold_gain: float = 0.35
+    roll_damper_integral_gain: float = 0.02
+    roll_damper_integral_limit: float = 1.0
+    heading_hold_gain: float = 0.25
+    heading_hold_integral_gain: float = 0.05
+    heading_hold_integral_limit: float = 1.0
 
 
 @dataclass(frozen=True)
@@ -45,6 +54,13 @@ class MasterControllerTrace:
     aileron_command: float
 
 
+@dataclass(frozen=True)
+class MasterControllerControllerTypes:
+    yaw_damper: ControllerType = "p"
+    roll_damper: ControllerType = "p"
+    heading_hold: ControllerType = "p"
+
+
 class MasterController:
     """Compose the prototype control blocks in the same order as actual_code.py."""
 
@@ -53,22 +69,36 @@ class MasterController:
         mode: MasterControllerMode = MasterControllerMode.YAW_DAMPER,
         gains: MasterControllerGains | None = None,
         targets: MasterControllerTargets | None = None,
+        controller_types: MasterControllerControllerTypes | None = None,
     ) -> None:
         self.mode = mode
         self.gains = gains or MasterControllerGains()
         self.targets = targets or MasterControllerTargets()
+        self.controller_types = controller_types or MasterControllerControllerTypes()
         self.yaw_damper = YawDamperController(
-            YawDamperGains(proportional_gain=self.gains.yaw_damper_gain)
+            YawDamperGains(
+                proportional_gain=self.gains.yaw_damper_gain,
+                integral_gain=self.gains.yaw_damper_integral_gain,
+                integral_limit=self.gains.yaw_damper_integral_limit,
+            )
         )
         self.roll_damper = RollDamperController(
-            RollDamperGains(proportional_gain=self.gains.roll_damper_gain)
+            RollDamperGains(
+                proportional_gain=self.gains.roll_damper_gain,
+                integral_gain=self.gains.roll_damper_integral_gain,
+                integral_limit=self.gains.roll_damper_integral_limit,
+            )
         )
         self.heading_hold = LegacyHeadingHoldController(
-            LegacyHeadingHoldGains(proportional_gain=self.gains.heading_hold_gain)
+            LegacyHeadingHoldGains(
+                proportional_gain=self.gains.heading_hold_gain,
+                integral_gain=self.gains.heading_hold_integral_gain,
+                integral_limit=self.gains.heading_hold_integral_limit,
+            )
         )
         self._latest_trace: MasterControllerTrace | None = None
 
-    def compute(self, state: AircraftState) -> ControlCommand:
+    def compute(self, state: AircraftState, dt_s: float = 0.0) -> ControlCommand:
         heading_hold_output = None
         roll_damper_output = None
         yaw_damper_signal = self.targets.desired_yaw_rate_rad_s
@@ -77,17 +107,31 @@ class MasterController:
             heading_hold_output = self.heading_hold.compute(
                 state,
                 target_heading_deg=self.targets.target_heading_deg,
+                dt_s=dt_s,
+                controller_type=self.controller_types.heading_hold,
             )
-            roll_damper_output = self.roll_damper.compute(state, signal=heading_hold_output)
+            roll_damper_output = self.roll_damper.compute(
+                state,
+                signal=heading_hold_output,
+                dt_s=dt_s,
+                controller_type=self.controller_types.roll_damper,
+            )
             yaw_damper_signal = roll_damper_output
         elif self.mode is MasterControllerMode.YAW_ROLL_DAMPER:
             roll_damper_output = self.roll_damper.compute(
                 state,
                 signal=self.targets.desired_roll_rate_rad_s,
+                dt_s=dt_s,
+                controller_type=self.controller_types.roll_damper,
             )
             yaw_damper_signal = roll_damper_output
 
-        command = self.yaw_damper.compute(state, signal=yaw_damper_signal)
+        command = self.yaw_damper.compute(
+            state,
+            signal=yaw_damper_signal,
+            dt_s=dt_s,
+            controller_type=self.controller_types.yaw_damper,
+        )
         self._latest_trace = MasterControllerTrace(
             heading_hold_output=heading_hold_output,
             roll_damper_output=roll_damper_output,
@@ -98,6 +142,12 @@ class MasterController:
 
     def get_latest_trace(self) -> MasterControllerTrace | None:
         return self._latest_trace
+
+    def reset(self) -> None:
+        self.yaw_damper.reset()
+        self.roll_damper.reset()
+        self.heading_hold.reset()
+        self._latest_trace = None
 
 
 class MasterControllerHandler:
@@ -113,9 +163,13 @@ class MasterControllerHandler:
         self.controller = controller
         self.print_status = print_status
         self._latest_command: ControlCommand | None = None
+        self._last_state_time: float | None = None
 
     def handle_state(self, state: AircraftState) -> None:
-        command = self.controller.compute(state)
+        now = monotonic()
+        dt_s = 0.0 if self._last_state_time is None else max(0.0, now - self._last_state_time)
+        self._last_state_time = now
+        command = self.controller.compute(state, dt_s=dt_s)
         self._latest_command = command
         self.sender.send_control_command(command)
 
@@ -130,4 +184,6 @@ class MasterControllerHandler:
         return self._latest_command
 
     def close(self) -> None:
+        self._last_state_time = None
+        self.controller.reset()
         return None

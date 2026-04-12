@@ -29,10 +29,17 @@ If you use a virtual environment, activate it first.
 
 ## Installation
 
-Install the package in editable mode from the repository root:
+Create and activate a project-local virtual environment from the repository root:
 
 ```bash
-python3 -m pip install -e .
+python3 -m venv .venv
+source .venv/bin/activate
+```
+
+Then install the package in editable mode:
+
+```bash
+python -m pip install -e .
 ```
 
 If you want live plotting support, install the plotting extra.
@@ -40,14 +47,16 @@ If you want live plotting support, install the plotting extra.
 If you are using `zsh`, quote the extras specifier:
 
 ```bash
-python3 -m pip install -e '.[plots]'
+python -m pip install -e '.[plots]'
 ```
 
 Equivalent `zsh`-safe form:
 
 ```bash
-python3 -m pip install -e .\[plots\]
+python -m pip install -e .\[plots\]
 ```
+
+If your Linux distribution blocks system-wide `pip install` with an externally managed environment error, use the virtual environment commands above and do not install into the system Python.
 
 ## How To Run
 
@@ -168,14 +177,19 @@ Available control-mode flags:
 
 If you run `python_client.cli.run_yaw_damper` without one of these flags, it defaults to `--yaw-damper`. The combined `run_all` command only enables control when one of the mode flags is present.
 
+The yaw damper, roll damper, and heading hold can each run as either:
+
+- `p`: proportional only
+- `pi`: proportional plus integral action
+
 ```bash
-python3 -m python_client.cli.run_yaw_damper --hz 10 --yaw-damper-gain 1.0
+python3 -m python_client.cli.run_yaw_damper --hz 10 --yaw-damper-gain 2.0
 ```
 
 Installed script form:
 
 ```bash
-python-client-run-yaw-damper --hz 10 --yaw-damper-gain 1.0
+python-client-run-yaw-damper --hz 10 --yaw-damper-gain 2.0
 ```
 
 To target a nonzero yaw rate in yaw-damper-only mode, pass `--desired-yaw-rate-deg-s`:
@@ -184,25 +198,56 @@ To target a nonzero yaw rate in yaw-damper-only mode, pass `--desired-yaw-rate-d
 python3 -m python_client.cli.run_yaw_damper --yaw-damper --hz 10 --yaw-damper-gain 1.0 --desired-yaw-rate-deg-s 5.0
 ```
 
+To run the yaw damper in PI mode:
+
+```bash
+python3 -m python_client.cli.run_yaw_damper --yaw-damper --hz 10 --yaw-controller-type pi --yaw-damper-gain 2.0 --yaw-damper-integral-gain 0.03 --desired-yaw-rate-deg-s 5.0
+```
+
 To run the yaw-plus-roll cascade:
 
 ```bash
-python3 -m python_client.cli.run_yaw_damper --yaw-roll-damper --hz 10 --yaw-damper-gain 9.0 --roll-damper-gain 0.05 --desired-roll-rate-deg-s 0.0
+python3 -m python_client.cli.run_yaw_damper --yaw-roll-damper --hz 10 --yaw-damper-gain 2.0 --roll-damper-gain 0.5 --desired-roll-rate-deg-s 0.0
+```
+
+To run the yaw-plus-roll cascade with PI control on both dampers:
+
+```bash
+python3 -m python_client.cli.run_yaw_damper --yaw-roll-damper --hz 10 --yaw-controller-type pi --roll-controller-type pi --yaw-damper-gain 1.0 --yaw-damper-integral-gain 0.03 --roll-damper-gain 0.35 --roll-damper-integral-gain 0.01 --desired-roll-rate-deg-s 0.0
 ```
 
 To run the full heading-hold -> roll-damper -> yaw-damper cascade:
 
 ```bash
-python3 -m python_client.cli.run_yaw_damper --yaw-roll-heading-hold --hz 10 --yaw-damper-gain 9.0 --roll-damper-gain 0.05 --heading-hold-gain 0.35 --target-heading-deg 0.0
+python3 -m python_client.cli.run_yaw_damper --yaw-roll-heading-hold --hz 10 --yaw-damper-gain 2.0 --roll-damper-gain 0.5 --heading-hold-gain 0.25 --target-heading-deg 0.0
+```
+
+To run the full cascade with PI heading hold:
+
+```bash
+python3 -m python_client.cli.run_yaw_damper --yaw-roll-heading-hold --hz 10 --yaw-controller-type p --roll-controller-type p --heading-controller-type pi --yaw-damper-gain 2.0 --roll-damper-gain 0.5 --heading-hold-gain 0.25 --heading-hold-integral-gain 0.005 --target-heading-deg 270.0
 ```
 
 Options:
+- `--yaw-controller-type`: choose `p` or `pi` for the yaw-damper block. Defaults to `p`.
+- `--roll-controller-type`: choose `p` or `pi` for the roll-damper block. Defaults to `p`.
+- `--heading-controller-type`: choose `p` or `pi` for the heading-hold block. Defaults to `p`.
 - `--yaw-damper-gain`: proportional gain for the yaw-damper block
+- `--yaw-damper-integral-gain`: integral gain for the yaw-damper block when PI mode is selected
 - `--roll-damper-gain`: proportional gain for the roll-damper block
+- `--roll-damper-integral-gain`: integral gain for the roll-damper block when PI mode is selected
 - `--heading-hold-gain`: proportional gain for the heading-hold block
+- `--heading-hold-integral-gain`: integral gain for the heading-hold block when PI mode is selected
 - `--desired-yaw-rate-deg-s`: desired yaw-rate signal in degrees per second for yaw-damper-only mode. `0.0` means drive yaw rate toward zero.
 - `--desired-roll-rate-deg-s`: desired roll-rate signal in degrees per second for yaw-plus-roll mode
-- `--target-heading-deg`: target heading for the full three-block cascade
+- `--target-heading-deg`: target heading in degrees for the full three-block cascade
+
+Controller notes:
+- `--target-heading-deg` is entered in degrees at the command line.
+- Heading-hold calculations convert the wrapped shortest heading error to radians internally before it is passed into the rest of the cascade.
+- Yaw, roll, and heading PI modes all include integral anti-windup clamping.
+
+The PI integrators use `dt` measured from the spacing between successive X-Plane telemetry samples received by the client.
 
 ### 7. Run plotting, recording, terminal output, and the controller together
 
@@ -215,13 +260,25 @@ python3 -m python_client.cli.run_all --hz 10 --history-seconds 60 --yaw-damper
 To use the yaw-plus-roll mode:
 
 ```bash
-python3 -m python_client.cli.run_all --hz 10 --history-seconds 60 --yaw-roll-damper --yaw-damper-gain 9.0 --roll-damper-gain 0.05
+python3 -m python_client.cli.run_all --hz 10 --history-seconds 60 --yaw-roll-damper --yaw-damper-gain 2.0 --roll-damper-gain 0.5
+```
+
+To use PI control with live plotting:
+
+```bash
+python3 -m python_client.cli.run_all --hz 10 --history-seconds 60 --yaw-roll-damper --yaw-controller-type pi --roll-controller-type pi --yaw-damper-gain 1.0 --yaw-damper-integral-gain 0.03 --roll-damper-gain 0.35 --roll-damper-integral-gain 0.01
 ```
 
 To use the full heading-hold cascade:
 
 ```bash
-python3 -m python_client.cli.run_all --hz 10 --history-seconds 60 --yaw-roll-heading-hold --yaw-damper-gain 9.0 --roll-damper-gain 0.05 --heading-hold-gain 0.35 --target-heading-deg 0.0
+python3 -m python_client.cli.run_all --hz 10 --history-seconds 60 --yaw-roll-heading-hold --yaw-damper-gain 2.0 --roll-damper-gain 0.5 --heading-hold-gain 0.25 --target-heading-deg 0.0
+```
+
+To use heading-hold PI with the current working proportional defaults:
+
+```bash
+python3 -m python_client.cli.run_all --hz 10 --history-seconds 60 --yaw-roll-heading-hold --yaw-controller-type p --roll-controller-type p --heading-controller-type pi --yaw-damper-gain 2.0 --roll-damper-gain 0.5 --heading-hold-gain 0.25 --heading-hold-integral-gain 0.005 --target-heading-deg 270.0
 ```
 
 ## Running Without Installing

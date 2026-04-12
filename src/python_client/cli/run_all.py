@@ -8,7 +8,7 @@ from python_client.config import DEFAULT_NETWORK_CONFIG, DEFAULT_PATHS_CONFIG
 from python_client.control import MasterController, MasterControllerHandler
 from python_client.logging.recorder import SessionRecorder
 from python_client.plotting.realtime import LivePlotter
-from python_client.runtime import close_handlers, run_client_to_handlers
+from python_client.runtime import StopRequested, close_handlers, run_client_to_handlers, trap_sigint
 from python_client.xplane.client import XPlaneClient
 from python_client.xplane.exceptions import XPlaneIpNotFound
 
@@ -54,42 +54,44 @@ def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     output_path = args.output or default_output_path()
     handlers = []
-    mode, gains, targets = build_master_controller(args)
+    mode, gains, targets, controller_types = build_master_controller(args)
 
     try:
-        with XPlaneClient.discover(wait=args.wait, hz=args.hz) as client:
-            command_provider = None
-            master_handler = None
-            if mode is not None:
-                master_handler = MasterControllerHandler(
-                    sender=client,
-                    controller=MasterController(
-                        mode=mode,
-                        gains=gains,
-                        targets=targets,
-                    ),
+        with trap_sigint() as should_stop:
+            with XPlaneClient.discover(wait=args.wait, hz=args.hz) as client:
+                command_provider = None
+                master_handler = None
+                if mode is not None:
+                    master_handler = MasterControllerHandler(
+                        sender=client,
+                        controller=MasterController(
+                            mode=mode,
+                            gains=gains,
+                            targets=targets,
+                            controller_types=controller_types,
+                        ),
+                    )
+                    command_provider = master_handler
+
+                printer = TelemetryPrinter(command_provider=command_provider)
+                recorder = SessionRecorder(output_path, command_provider=command_provider)
+                plotter = LivePlotter(
+                    hz=args.hz,
+                    history_seconds=args.history_seconds,
+                    command_provider=command_provider,
                 )
-                command_provider = master_handler
+                if master_handler is not None:
+                    handlers = [master_handler, recorder, printer, plotter]
+                else:
+                    handlers = [recorder, printer, plotter]
 
-            printer = TelemetryPrinter(command_provider=command_provider)
-            recorder = SessionRecorder(output_path, command_provider=command_provider)
-            plotter = LivePlotter(
-                hz=args.hz,
-                history_seconds=args.history_seconds,
-                command_provider=command_provider,
-            )
-            if master_handler is not None:
-                handlers = [master_handler, recorder, printer, plotter]
-            else:
-                handlers = [recorder, printer, plotter]
-
-            recorder.__enter__()
-            print("Streaming telemetry, recording CSV, and updating the live plot.")
-            if mode is not None:
-                print(f"Control mode '{mode.value}' is enabled in this same process.")
-            print(f"Recording telemetry to {output_path}. Press Ctrl+C to stop.\n")
-            run_client_to_handlers(client, handlers)
-    except KeyboardInterrupt:
+                recorder.__enter__()
+                print("Streaming telemetry, recording CSV, and updating the live plot.")
+                if mode is not None:
+                    print(f"Control mode '{mode.value}' is enabled in this same process.")
+                print(f"Recording telemetry to {output_path}. Press Ctrl+C to stop.\n")
+                run_client_to_handlers(client, handlers, should_stop=should_stop)
+    except (KeyboardInterrupt, StopRequested):
         print("\nStopping...")
     except (ImportError, TimeoutError, XPlaneIpNotFound) as exc:
         print(exc)

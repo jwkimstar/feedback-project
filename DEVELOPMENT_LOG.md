@@ -214,3 +214,71 @@ During the same session, the logging and visualization paths were expanded so co
 - Check radians-to-degrees conversion across the CLI input path, CSV output, console output, and both plotting paths.
 - Tune the yaw-roll damping path against live simulation data.
 - Verify the full yaw-roll-heading controller mode in simulation and confirm the chained block behavior matches intent.
+- Decide whether the legacy proportional heading-hold block should remain separate from the more advanced packaged `HeadingHoldController`, or whether the advanced controller should eventually replace it in the master cascade.
+- Add optional plotting of intermediate block outputs so heading-hold and roll-damper signals can be inspected alongside the final aileron command.
+- Add parser or integration tests for the new control-mode flags once a Python 3.11 test environment is available.
+
+## April 5, 2026
+
+### Summary
+
+Expanded the packaged flight-control runtime so the combined X-Plane workflow is usable for repeated controller tuning runs from a local virtual environment.
+
+The control chain now supports proportional or proportional-integral operation on yaw damper, roll damper, and heading hold, while preserving degree-based operator inputs and displays. The runtime was also hardened so live control runs stay closer to the newest X-Plane telemetry sample, shut down more cleanly, and send control commands through the discovered simulator port by default.
+
+### Added
+
+- `src/python_client/control/yaw_damper.py`
+  - Added explicit `p` and `pi` controller paths, integral-state reset support, and anti-windup clamping for the yaw damper.
+- `src/python_client/control/roll_damper.py`
+  - Added explicit `p` and `pi` controller paths, integral-state reset support, and anti-windup clamping for the roll damper.
+- `src/python_client/control/legacy_heading_hold.py`
+  - Added internal radian-based heading-hold calculations, `p` and `pi` controller paths, anti-windup clamping, and wrapped shortest-turn heading error handling.
+- `src/python_client/control/master_controller.py`
+  - Added controller-type selection and integral-gain plumbing for all active control blocks, measured sample-to-sample `dt` handling, and shared reset behavior across the cascade.
+- `src/python_client/cli/control_options.py`
+  - Added command-line flags for selecting `p` vs `pi` on yaw damper, roll damper, and heading hold, plus integral-gain flags for each loop.
+- `tests/test_packets.py`
+  - Added regression coverage for actuator packet construction, discovered-port command sending, and newest-sample telemetry draining.
+
+### Modified
+
+- `src/python_client/xplane/client.py`
+  - Updated telemetry receipt to drain queued `RPOS` packets and keep the newest sample, and send actuator commands to the discovered X-Plane UDP port unless an override is configured.
+- `src/python_client/runtime.py`
+  - Added clean stop handling so long-running control sessions respond more predictably to `Ctrl+C`.
+- `src/python_client/cli/run_all.py`
+  - Updated the combined runner to use the new clean-stop path and current controller-type/gain wiring.
+- `src/python_client/cli/run_yaw_damper.py`
+  - Updated the dedicated control runner to use the same clean-stop path and controller-type/gain wiring.
+- `src/python_client/plotting/realtime.py`
+  - Reduced redraw pressure during live runs by capping plot refresh frequency and stopping cleanly when the plot window closes.
+- `src/python_client/console.py`
+  - Switched terminal telemetry output to in-place status updates and normalized displayed heading to make comparisons against X-Plane easier.
+- `src/python_client/config.py`
+  - Changed the default control-command port behavior to follow the discovered X-Plane port unless explicitly overridden.
+- `README.md`
+  - Updated installation guidance, controller documentation, and current example commands to match the packaged runtime behavior.
+- `tests/test_console.py`
+  - Updated console expectations for degree-based rate display and heading normalization.
+- `tests/test_master_controller.py`
+  - Added regression coverage for yaw, roll, and heading PI behavior, heading wraparound, and controller reset behavior.
+- `tests/test_plotting_analysis.py`
+  - Updated offline plotting expectations to match the current degree-based rate-series interface.
+- `tests/test_yaw_damper.py`
+  - Added PI-path and anti-windup regression coverage for the yaw damper.
+
+### Verification
+
+- `source .venv/bin/activate`
+- `pytest -q`
+- `python -m python_client.cli.run_all --help`
+- `python -m python_client.cli.run_yaw_damper --help`
+
+### Next Step Ideas
+
+1. We want to clamp roll rate to not make it unstable
+2. Make sure integral windup is correct
+3. Add a pitch controller
+4. add the derivative in PID
+5. Test non zero references
