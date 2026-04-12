@@ -4,10 +4,7 @@ from math import degrees
 from time import monotonic
 from typing import Literal, Protocol
 
-from python_client.control.legacy_heading_hold import (
-    LegacyHeadingHoldController,
-    LegacyHeadingHoldGains,
-)
+from python_client.control.heading_hold import HeadingHoldController, HeadingHoldGains
 from python_client.control.roll_damper import RollDamperController, RollDamperGains
 from python_client.control.yaw_damper import YawDamperController, YawDamperGains
 from python_client.models import AircraftState, ControlCommand
@@ -31,6 +28,7 @@ class MasterControllerGains:
     yaw_damper_gain: float = 2.0
     yaw_damper_integral_gain: float = 0.15
     yaw_damper_integral_limit: float = 1.0
+    yaw_damper_anti_windup_gain: float = 1.0
     roll_damper_gain: float = 0.5
     roll_damper_integral_gain: float = 0.02
     roll_damper_integral_limit: float = 1.0
@@ -80,6 +78,7 @@ class MasterController:
                 proportional_gain=self.gains.yaw_damper_gain,
                 integral_gain=self.gains.yaw_damper_integral_gain,
                 integral_limit=self.gains.yaw_damper_integral_limit,
+                anti_windup_gain=self.gains.yaw_damper_anti_windup_gain,
             )
         )
         self.roll_damper = RollDamperController(
@@ -89,8 +88,8 @@ class MasterController:
                 integral_limit=self.gains.roll_damper_integral_limit,
             )
         )
-        self.heading_hold = LegacyHeadingHoldController(
-            LegacyHeadingHoldGains(
+        self.heading_hold = HeadingHoldController(
+            HeadingHoldGains(
                 proportional_gain=self.gains.heading_hold_gain,
                 integral_gain=self.gains.heading_hold_integral_gain,
                 integral_limit=self.gains.heading_hold_integral_limit,

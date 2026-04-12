@@ -2,8 +2,8 @@ import pytest
 from math import radians
 
 from python_client.control import (
-    LegacyHeadingHoldController,
-    LegacyHeadingHoldGains,
+    HeadingHoldController,
+    HeadingHoldGains,
     MasterController,
     MasterControllerControllerTypes,
     MasterControllerGains,
@@ -39,9 +39,7 @@ def make_state(
 
 
 def test_legacy_heading_hold_matches_actual_code_formula() -> None:
-    controller = LegacyHeadingHoldController(
-        LegacyHeadingHoldGains(proportional_gain=0.35)
-    )
+    controller = HeadingHoldController(HeadingHoldGains(proportional_gain=0.35))
 
     output = controller.compute_output(12.0, 4.0)
 
@@ -49,9 +47,7 @@ def test_legacy_heading_hold_matches_actual_code_formula() -> None:
 
 
 def test_legacy_heading_hold_wraps_to_shortest_heading_error() -> None:
-    controller = LegacyHeadingHoldController(
-        LegacyHeadingHoldGains(proportional_gain=1.0)
-    )
+    controller = HeadingHoldController(HeadingHoldGains(proportional_gain=1.0))
 
     right_turn = controller.compute_output(273.0, 0.0)
     left_turn = controller.compute_output(10.0, 350.0)
@@ -61,8 +57,8 @@ def test_legacy_heading_hold_wraps_to_shortest_heading_error() -> None:
 
 
 def test_legacy_heading_hold_pi_accumulates_integral_action() -> None:
-    controller = LegacyHeadingHoldController(
-        LegacyHeadingHoldGains(
+    controller = HeadingHoldController(
+        HeadingHoldGains(
             proportional_gain=0.25,
             integral_gain=0.5,
             integral_limit=10.0,
@@ -149,6 +145,26 @@ def test_master_controller_reset_clears_integral_state() -> None:
 
     assert charged.aileron == pytest.approx(-0.5)
     assert reset.aileron == pytest.approx(0.0)
+
+
+def test_master_controller_yaw_pi_uses_back_calculation_when_saturated() -> None:
+    controller = MasterController(
+        mode=MasterControllerMode.YAW_DAMPER,
+        gains=MasterControllerGains(
+            yaw_damper_gain=10.0,
+            yaw_damper_integral_gain=1.0,
+            yaw_damper_integral_limit=10.0,
+            yaw_damper_anti_windup_gain=1.0,
+        ),
+        controller_types=MasterControllerControllerTypes(yaw_damper="pi"),
+    )
+
+    first = controller.compute(make_state(r_rad_s=0.2), dt_s=1.0)
+    second = controller.compute(make_state(r_rad_s=0.2), dt_s=1.0)
+
+    assert first.aileron == pytest.approx(-1.0)
+    assert second.aileron == pytest.approx(-1.0)
+    assert controller.yaw_damper._integral_term == pytest.approx(1.0)
 
 
 def test_master_controller_heading_mode_matches_three_block_cascade() -> None:

@@ -88,6 +88,60 @@ def test_yaw_damper_pi_respects_integral_limit_and_reset() -> None:
     assert reset_command.aileron == pytest.approx(0.0)
 
 
+def test_yaw_damper_pi_back_calculation_tracks_saturated_output() -> None:
+    controller = YawDamperController(
+        YawDamperGains(
+            proportional_gain=10.0,
+            integral_gain=1.0,
+            integral_limit=10.0,
+            anti_windup_gain=1.0,
+        )
+    )
+
+    first = controller.compute(
+        make_state(0.2),
+        signal=0.0,
+        dt_s=1.0,
+        controller_type="pi",
+    )
+    second = controller.compute(
+        make_state(0.2),
+        signal=0.0,
+        dt_s=1.0,
+        controller_type="pi",
+    )
+
+    assert first.aileron == pytest.approx(-1.0)
+    assert second.aileron == pytest.approx(-1.0)
+    assert controller._integral_term == pytest.approx(1.0)
+
+
+def test_yaw_damper_pi_without_back_calculation_preserves_old_windup_behavior() -> None:
+    controller = YawDamperController(
+        YawDamperGains(
+            proportional_gain=10.0,
+            integral_gain=1.0,
+            integral_limit=10.0,
+            anti_windup_gain=0.0,
+        )
+    )
+
+    controller.compute(
+        make_state(0.2),
+        signal=0.0,
+        dt_s=1.0,
+        controller_type="pi",
+    )
+    controller.compute(
+        make_state(0.2),
+        signal=0.0,
+        dt_s=1.0,
+        controller_type="pi",
+    )
+
+    assert controller._integral_term == pytest.approx(-0.4)
+
+
 def test_build_control_command_packet_populates_control_surface_row() -> None:
     packet = build_control_command_packet(
         ControlCommand(elevator=0.1, aileron=-0.2, rudder=0.3, throttle=0.4)
