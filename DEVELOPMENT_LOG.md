@@ -282,3 +282,73 @@ The control chain now supports proportional or proportional-integral operation o
 3. Add a pitch controller
 4. add the derivative in PID
 5. Test non zero references
+
+## 2026-04-12
+
+### Summary
+
+Refined the packaged controller stack for continued live tuning work and corrected several control-surface assumptions while doing it.
+
+The heading-hold module was promoted to the canonical `heading_hold.py` path, the heading-hold controller was expanded to support PD and PID operation with measurement-based derivative action, and the yaw damper gained saturation-aware back-calculation for Phase 1 anti-windup support. During the same session, the first attempt at limiting the initial transient was corrected: instead of clamping heading-hold output, the roll-damper output is now clamped as a yaw-rate command limit before it is passed into the yaw damper. The README was also brought back in line with the actual CLI surface and now includes a current baseline `run_all` command for the working controller setup.
+
+### Added
+
+- `src/python_client/control/heading_hold.py`
+  - Established this file as the canonical heading-hold module path replacing the older `legacy_heading_hold.py` naming.
+  - Added PD and PID controller paths with derivative state tracking and wrapped measurement-derivative handling across heading wraparound.
+- `tests/test_yaw_damper.py`
+  - Added regression coverage for yaw-damper back-calculation behavior and for the fallback no-back-calculation case when anti-windup gain is disabled.
+
+### Modified
+
+- `src/python_client/control/__init__.py`
+  - Updated package exports so `HeadingHoldController` / `HeadingHoldGains` are the primary public heading-hold symbols, while compatibility aliases remain available for older imports.
+- `src/python_client/control/master_controller.py`
+  - Updated imports to use `heading_hold.py`.
+  - Added heading-hold derivative-gain plumbing and `pd` / `pid` support at the master-controller level.
+  - Added roll-damper yaw-rate clamp plumbing through `roll_damper_max_yaw_rate_rad_s`.
+- `src/python_client/control/heading_hold.py`
+  - Added measurement-based derivative logic for heading hold to avoid derivative kick when the target heading changes.
+  - Added reset behavior for derivative state and preserved wrapped shortest-turn heading calculations.
+  - Kept backward-compatible aliases for the previous `LegacyHeadingHold...` names.
+- `src/python_client/control/yaw_damper.py`
+  - Reworked the PI path to use a back-calculated integral term in controller-output units.
+  - Added `anti_windup_gain` so the yaw damper can reduce integrator buildup when the final aileron command saturates.
+- `src/python_client/control/roll_damper.py`
+  - Added symmetric output clamping so the roll-damper output can be limited as a yaw-rate command before it reaches the yaw damper.
+- `src/python_client/cli/control_options.py`
+  - Added CLI support for heading-hold derivative gain and PID controller selection.
+  - Added `--roll-damper-max-yaw-rate-deg-s` so yaw-rate clamp tuning can be done in operator-facing units.
+- `README.md`
+  - Corrected the controller-type documentation so only heading hold is described as supporting `pd` / `pid`.
+  - Documented the roll-damper yaw-rate clamp and added the current baseline `run_all` command as the default test setup for a working controller.
+- `tests/test_master_controller.py`
+  - Added coverage for heading-hold PD/PID behavior, wraparound-safe derivative handling, derivative reset, and master-controller PID plumbing.
+  - Added coverage for roll-damper output clamping and master-controller propagation of the yaw-rate clamp.
+
+### Removed
+
+- `src/python_client/control/legacy_heading_hold.py`
+  - Retired the old module path after moving the canonical implementation to `heading_hold.py`.
+
+### Verification
+
+- `python3 -m compileall src tests`
+- `env PYTHONPATH=src python3 -c "from python_client.control import HeadingHoldController, HeadingHoldGains, LegacyHeadingHoldController; from python_client.control.master_controller import MasterController; print('ok')"`
+- `env PYTHONPATH=src python3 -m python_client.cli.run_yaw_damper --help`
+- `env PYTHONPATH=src python3 -m python_client.cli.run_all --help`
+- Multiple direct `PYTHONPATH=src python3` probes were used during the session to verify:
+  - yaw-damper back-calculation behavior
+  - heading-hold PD/PID derivative behavior and wraparound handling
+  - roll-damper yaw-rate clamp behavior
+  - CLI degree-to-radian conversion for the new yaw-rate clamp
+
+### Verification Notes
+
+- `pytest` could not be run in the current environment because the active Python installation still does not have `pytest` installed.
+
+### Next Step Ideas
+
+- Add saturation-aware anti-windup to the roll-damper clamp path, since `pi` roll-damper runs can still integrate against the new yaw-rate limit.
+- Decide whether a measured-yaw-rate safety limiter should be added if the intent is to bound actual aircraft yaw rate rather than only the commanded yaw-rate reference.
+- Tune the new default controller baseline in live simulation and record step-response data for overshoot and settling-time comparisons.

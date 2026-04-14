@@ -11,6 +11,8 @@ class RollDamperGains:
     proportional_gain: float = 0.05
     integral_gain: float = 0.02
     integral_limit: float = 1.0
+    min_output: float | None = None
+    max_output: float | None = None
 
 
 class RollDamperController:
@@ -20,12 +22,20 @@ class RollDamperController:
         self.gains = gains or RollDamperGains()
         self._integral_error = 0.0
 
+    def _clamp_output(self, output: float) -> float:
+        if self.gains.min_output is not None:
+            output = max(self.gains.min_output, output)
+        if self.gains.max_output is not None:
+            output = min(self.gains.max_output, output)
+        return output
+
     def compute_output_p(
         self,
         current_roll_rate_rad_s: float,
         signal: float = 0.0,
     ) -> float:
-        return self.gains.proportional_gain * (signal - current_roll_rate_rad_s)
+        output = self.gains.proportional_gain * (signal - current_roll_rate_rad_s)
+        return self._clamp_output(output)
 
     def compute_output(
         self,
@@ -47,10 +57,11 @@ class RollDamperController:
                 -self.gains.integral_limit,
                 min(self.gains.integral_limit, self._integral_error),
             )
-        return (
+        output = (
             self.gains.proportional_gain * error
             + self.gains.integral_gain * self._integral_error
         )
+        return self._clamp_output(output)
 
     def compute(
         self,

@@ -21,6 +21,7 @@ class MasterControllerMode(str, Enum):
     YAW_ROLL_HEADING_HOLD = "yaw-roll-heading-hold"
 
 ControllerType = Literal["p", "pi"]
+HeadingControllerType = Literal["p", "pi", "pd", "pid"]
 
 
 @dataclass(frozen=True)
@@ -31,9 +32,11 @@ class MasterControllerGains:
     roll_damper_gain: float = 0.5
     roll_damper_integral_gain: float = 0.02
     roll_damper_integral_limit: float = 1.0
+    roll_damper_max_yaw_rate_rad_s: float | None = None
     heading_hold_gain: float = 0.25
     heading_hold_integral_gain: float = 0.05
     heading_hold_integral_limit: float = 1.0
+    heading_hold_derivative_gain: float = 0.0
 
 
 @dataclass(frozen=True)
@@ -55,7 +58,7 @@ class MasterControllerTrace:
 class MasterControllerControllerTypes:
     yaw_damper: ControllerType = "p"
     roll_damper: ControllerType = "p"
-    heading_hold: ControllerType = "p"
+    heading_hold: HeadingControllerType = "p"
 
 
 class MasterController:
@@ -84,6 +87,12 @@ class MasterController:
                 proportional_gain=self.gains.roll_damper_gain,
                 integral_gain=self.gains.roll_damper_integral_gain,
                 integral_limit=self.gains.roll_damper_integral_limit,
+                min_output=(
+                    None
+                    if self.gains.roll_damper_max_yaw_rate_rad_s is None
+                    else -self.gains.roll_damper_max_yaw_rate_rad_s
+                ),
+                max_output=self.gains.roll_damper_max_yaw_rate_rad_s,
             )
         )
         self.heading_hold = HeadingHoldController(
@@ -91,6 +100,7 @@ class MasterController:
                 proportional_gain=self.gains.heading_hold_gain,
                 integral_gain=self.gains.heading_hold_integral_gain,
                 integral_limit=self.gains.heading_hold_integral_limit,
+                derivative_gain=self.gains.heading_hold_derivative_gain,
             )
         )
         self._latest_trace: MasterControllerTrace | None = None

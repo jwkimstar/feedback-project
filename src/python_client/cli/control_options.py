@@ -61,6 +61,12 @@ def add_master_controller_arguments(
         help="Integral gain used by the roll-damper block when PI mode is selected.",
     )
     parser.add_argument(
+        "--roll-damper-max-yaw-rate-deg-s",
+        type=float,
+        default=None,
+        help="Clamp the roll-damper output to a symmetric max commanded yaw rate in deg/s.",
+    )
+    parser.add_argument(
         "--yaw-controller-type",
         choices=("p", "pi"),
         default=MasterControllerControllerTypes.yaw_damper,
@@ -74,7 +80,7 @@ def add_master_controller_arguments(
     )
     parser.add_argument(
         "--heading-controller-type",
-        choices=("p", "pi"),
+        choices=("p", "pi", "pd", "pid"),
         default=MasterControllerControllerTypes.heading_hold,
         help="Choose the heading-hold controller type.",
     )
@@ -89,6 +95,12 @@ def add_master_controller_arguments(
         type=float,
         default=MasterControllerGains.heading_hold_integral_gain,
         help="Integral gain used by the heading-hold block when PI mode is selected.",
+    )
+    parser.add_argument(
+        "--heading-hold-derivative-gain",
+        type=float,
+        default=MasterControllerGains.heading_hold_derivative_gain,
+        help="Derivative gain used by the heading-hold block when PD or PID mode is selected.",
     )
     parser.add_argument(
         "--desired-yaw-rate-deg-s",
@@ -127,8 +139,14 @@ def build_master_controller(
         yaw_damper_integral_gain=args.yaw_damper_integral_gain,
         roll_damper_gain=args.roll_damper_gain,
         roll_damper_integral_gain=args.roll_damper_integral_gain,
+        roll_damper_max_yaw_rate_rad_s=(
+            None
+            if args.roll_damper_max_yaw_rate_deg_s is None
+            else radians(args.roll_damper_max_yaw_rate_deg_s)
+        ),
         heading_hold_gain=args.heading_hold_gain,
         heading_hold_integral_gain=args.heading_hold_integral_gain,
+        heading_hold_derivative_gain=args.heading_hold_derivative_gain,
     )
     targets = MasterControllerTargets(
         desired_yaw_rate_rad_s=radians(args.desired_yaw_rate_deg_s),
