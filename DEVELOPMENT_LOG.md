@@ -313,7 +313,6 @@ The heading-hold module was promoted to the canonical `heading_hold.py` path, th
   - Kept backward-compatible aliases for the previous `LegacyHeadingHold...` names.
 - `src/python_client/control/yaw_damper.py`
   - Reworked the PI path to use a back-calculated integral term in controller-output units.
-  - Added `anti_windup_gain` so the yaw damper can reduce integrator buildup when the final aileron command saturates.
 - `src/python_client/control/roll_damper.py`
   - Added symmetric output clamping so the roll-damper output can be limited as a yaw-rate command before it reaches the yaw damper.
 - `src/python_client/cli/control_options.py`
