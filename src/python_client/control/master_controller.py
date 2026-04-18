@@ -16,6 +16,7 @@ class ControlCommandSender(Protocol):
 
 
 class MasterControllerMode(str, Enum):
+    HEADING_HOLD_ONLY = "heading-hold-only"
     YAW_DAMPER = "yaw-damper"
     YAW_ROLL_DAMPER = "yaw-roll-damper"
     YAW_ROLL_HEADING_HOLD = "yaw-roll-heading-hold"
@@ -105,40 +106,52 @@ class MasterController:
         )
         self._latest_trace: MasterControllerTrace | None = None
 
+    @staticmethod
+    def _clamp_aileron(aileron: float) -> float:
+        return max(-1.0, min(1.0, aileron))
+
     def compute(self, state: AircraftState, dt_s: float = 0.0) -> ControlCommand:
         heading_hold_output = None
         roll_damper_output = None
         yaw_damper_signal = self.targets.desired_yaw_rate_rad_s
 
-        if self.mode is MasterControllerMode.YAW_ROLL_HEADING_HOLD:
+        if self.mode is MasterControllerMode.HEADING_HOLD_ONLY:
             heading_hold_output = self.heading_hold.compute(
                 state,
                 target_heading_deg=self.targets.target_heading_deg,
                 dt_s=dt_s,
                 controller_type=self.controller_types.heading_hold,
             )
-            roll_damper_output = self.roll_damper.compute(
+            command = ControlCommand(aileron=self._clamp_aileron(heading_hold_output))
+        else:
+            if self.mode is MasterControllerMode.YAW_ROLL_HEADING_HOLD:
+                heading_hold_output = self.heading_hold.compute(
+                    state,
+                    target_heading_deg=self.targets.target_heading_deg,
+                    dt_s=dt_s,
+                    controller_type=self.controller_types.heading_hold,
+                )
+                roll_damper_output = self.roll_damper.compute(
+                    state,
+                    signal=heading_hold_output,
+                    dt_s=dt_s,
+                    controller_type=self.controller_types.roll_damper,
+                )
+                yaw_damper_signal = roll_damper_output
+            elif self.mode is MasterControllerMode.YAW_ROLL_DAMPER:
+                roll_damper_output = self.roll_damper.compute(
+                    state,
+                    signal=self.targets.desired_roll_rate_rad_s,
+                    dt_s=dt_s,
+                    controller_type=self.controller_types.roll_damper,
+                )
+                yaw_damper_signal = roll_damper_output
+            command = self.yaw_damper.compute(
                 state,
-                signal=heading_hold_output,
+                signal=yaw_damper_signal,
                 dt_s=dt_s,
-                controller_type=self.controller_types.roll_damper,
+                controller_type=self.controller_types.yaw_damper,
             )
-            yaw_damper_signal = roll_damper_output
-        elif self.mode is MasterControllerMode.YAW_ROLL_DAMPER:
-            roll_damper_output = self.roll_damper.compute(
-                state,
-                signal=self.targets.desired_roll_rate_rad_s,
-                dt_s=dt_s,
-                controller_type=self.controller_types.roll_damper,
-            )
-            yaw_damper_signal = roll_damper_output
-
-        command = self.yaw_damper.compute(
-            state,
-            signal=yaw_damper_signal,
-            dt_s=dt_s,
-            controller_type=self.controller_types.yaw_damper,
-        )
         self._latest_trace = MasterControllerTrace(
             heading_hold_output=heading_hold_output,
             roll_damper_output=roll_damper_output,

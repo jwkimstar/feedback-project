@@ -351,3 +351,37 @@ The heading-hold module was promoted to the canonical `heading_hold.py` path, th
 - Add saturation-aware anti-windup to the roll-damper clamp path, since `pi` roll-damper runs can still integrate against the new yaw-rate limit.
 - Decide whether a measured-yaw-rate safety limiter should be added if the intent is to bound actual aircraft yaw rate rather than only the commanded yaw-rate reference.
 - Tune the new default controller baseline in live simulation and record step-response data for overshoot and settling-time comparisons.
+
+## 2026-04-17
+
+### Summary
+
+Added a non-cascaded heading-only baseline mode so the project can compare the full cascaded controller against a simpler direct heading PID controller under the same packaged X-Plane workflow.
+
+The new baseline routes the heading-hold controller output directly to the aileron command instead of feeding heading hold into the roll damper and yaw damper. This keeps the existing cascaded modes intact while giving the project a cleaner reference case for plotting and presentation comparisons.
+
+### Modified
+
+- `src/python_client/control/master_controller.py`
+  - Added a `heading-hold-only` control mode that bypasses the roll damper and yaw damper.
+  - Added direct aileron clamping for the heading-only baseline path so the command stays inside the normal actuator range.
+- `src/python_client/cli/control_options.py`
+  - Added the `--heading-hold-only` CLI flag and clarified that `--target-heading-deg` applies to heading-hold modes.
+- `README.md`
+  - Documented the new heading-only PID baseline command.
+  - Added the matching `run_all` example for live plotting plus default timestamped session recording.
+- `tests/test_master_controller.py`
+  - Added regression coverage for direct heading-only aileron output and its clamp behavior.
+  - Updated the heading-hold reset regression to reflect the new direct-output baseline mode.
+
+### Verification
+
+- `source .venv/bin/activate`
+- `pytest -q tests/test_master_controller.py tests/test_yaw_damper.py`
+- `PYTHONPATH=src python3 -m python_client.cli.run_yaw_damper --help`
+- `PYTHONPATH=src python3 -m python_client.cli.run_all --help`
+
+### Next Step Ideas
+
+- Tune the heading-only PID baseline so its comparison against the cascaded controller is fair and repeatable.
+- Record matched baseline and cascaded runs under the same target-heading and sample-rate settings for offline plot comparisons.

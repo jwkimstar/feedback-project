@@ -171,6 +171,7 @@ This preserves the control blocks that now live in `actual_code.py`, but runs th
 
 Available control-mode flags:
 
+- `--heading-hold-only`: use a direct heading-hold controller as the non-cascaded baseline
 - `--yaw-damper`: use only the yaw-damper block
 - `--yaw-roll-damper`: cascade roll damper into yaw damper
 - `--yaw-roll-heading-hold`: cascade heading hold into roll damper into yaw damper
@@ -215,6 +216,18 @@ To run the yaw-plus-roll cascade with PI control on both dampers:
 
 ```bash
 python3 -m python_client.cli.run_yaw_damper --yaw-roll-damper --hz 10 --yaw-controller-type pi --roll-controller-type pi --yaw-damper-gain 1.0 --yaw-damper-integral-gain 0.03 --roll-damper-gain 0.35 --roll-damper-integral-gain 0.01 --desired-roll-rate-deg-s 0.0
+```
+
+To run the non-cascaded heading-only PID baseline:
+
+```bash
+python3 -m python_client.cli.run_yaw_damper --heading-hold-only --hz 10 --heading-controller-type pid --heading-hold-gain 0.25 --heading-hold-integral-gain 0.005 --heading-hold-derivative-gain 0.02 --target-heading-deg 270.0
+```
+
+To run the same heading-only PID baseline through the combined live plot + CSV recorder flow and keep the default timestamped `artifacts/session-YYYYMMDD-HHMMSS.csv` output naming:
+
+```bash
+python3 -m python_client.cli.run_all --heading-hold-only --hz 10 --history-seconds 60 --heading-controller-type pid --heading-hold-gain 0.25 --heading-hold-integral-gain 0.005 --heading-hold-derivative-gain 0.02 --target-heading-deg 270.0
 ```
 
 To run the full heading-hold -> roll-damper -> yaw-damper cascade:

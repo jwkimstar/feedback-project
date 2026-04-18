@@ -16,6 +16,13 @@ def add_master_controller_arguments(
 ) -> None:
     group = parser.add_mutually_exclusive_group(required=require_mode)
     group.add_argument(
+        "--heading-hold-only",
+        dest="control_mode",
+        action="store_const",
+        const=MasterControllerMode.HEADING_HOLD_ONLY.value,
+        help="Enable a direct heading-hold baseline without roll or yaw dampers.",
+    )
+    group.add_argument(
         "--yaw-damper",
         dest="control_mode",
         action="store_const",
@@ -118,7 +125,7 @@ def add_master_controller_arguments(
         "--target-heading-deg",
         type=float,
         default=MasterControllerTargets.target_heading_deg,
-        help="Target heading in degrees for yaw-plus-roll-plus-heading mode.",
+        help="Target heading in degrees for heading-hold modes.",
     )
 
 

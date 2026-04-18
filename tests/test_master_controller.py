@@ -176,6 +176,35 @@ def test_master_controller_yaw_only_mode_returns_aileron_command() -> None:
     assert command == ControlCommand(aileron=-0.3)
 
 
+def test_master_controller_heading_hold_only_mode_returns_direct_aileron_command() -> None:
+    controller = MasterController(
+        mode=MasterControllerMode.HEADING_HOLD_ONLY,
+        gains=MasterControllerGains(heading_hold_gain=0.5),
+        targets=MasterControllerTargets(target_heading_deg=0.0),
+    )
+
+    command = controller.compute(make_state(heading_deg=10.0))
+    trace = controller.get_latest_trace()
+
+    assert command.aileron == pytest.approx(-0.08726646259971647)
+    assert trace is not None
+    assert trace.heading_hold_output == pytest.approx(command.aileron)
+    assert trace.roll_damper_output is None
+    assert trace.yaw_damper_signal == pytest.approx(0.0)
+
+
+def test_master_controller_heading_hold_only_mode_clamps_direct_aileron_command() -> None:
+    controller = MasterController(
+        mode=MasterControllerMode.HEADING_HOLD_ONLY,
+        gains=MasterControllerGains(heading_hold_gain=10.0),
+        targets=MasterControllerTargets(target_heading_deg=180.0),
+    )
+
+    command = controller.compute(make_state(heading_deg=0.0))
+
+    assert command.aileron == pytest.approx(-1.0)
+
+
 def test_master_controller_yaw_roll_mode_cascades_roll_into_yaw() -> None:
     controller = MasterController(
         mode=MasterControllerMode.YAW_ROLL_DAMPER,
@@ -316,7 +345,7 @@ def test_master_controller_heading_mode_clamps_roll_damper_output() -> None:
 
 def test_master_controller_reset_clears_heading_hold_integral_state() -> None:
     controller = MasterController(
-        mode=MasterControllerMode.YAW_ROLL_HEADING_HOLD,
+        mode=MasterControllerMode.HEADING_HOLD_ONLY,
         gains=MasterControllerGains(
             yaw_damper_gain=0.0,
             roll_damper_gain=0.0,
@@ -331,7 +360,7 @@ def test_master_controller_reset_clears_heading_hold_integral_state() -> None:
     controller.reset()
     reset = controller.compute(make_state(heading_deg=10.0), dt_s=0.0)
 
-    assert charged.aileron == pytest.approx(0.0)
+    assert charged.aileron == pytest.approx(-radians(10.0))
     assert reset.aileron == pytest.approx(0.0)
 
 
