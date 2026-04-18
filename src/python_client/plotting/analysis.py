@@ -1,12 +1,43 @@
 import csv
 from dataclasses import dataclass
+from io import StringIO
 from pathlib import Path
 
 
-def load_recording(path: str | Path) -> list[dict[str, str]]:
+@dataclass(frozen=True)
+class RecordingData:
+    metadata: dict[str, str]
+    rows: list[dict[str, str]]
+
+
+def _parse_metadata_line(line: str) -> tuple[str, str] | None:
+    if not line.startswith("#"):
+        return None
+    key, separator, value = line[1:].strip().partition("=")
+    if separator == "":
+        return None
+    return key.strip(), value.strip()
+
+
+def load_recording(path: str | Path) -> RecordingData:
+    metadata: dict[str, str] = {}
+    csv_lines: list[str] = []
+
     with Path(path).open(newline="", encoding="utf-8") as handle:
-        reader = csv.DictReader(handle)
-        return list(reader)
+        for line in handle:
+            stripped = line.strip()
+            if not csv_lines and stripped == "":
+                continue
+            if not csv_lines:
+                parsed_metadata = _parse_metadata_line(line)
+                if parsed_metadata is not None:
+                    key, value = parsed_metadata
+                    metadata[key] = value
+                    continue
+            csv_lines.append(line)
+
+    reader = csv.DictReader(StringIO("".join(csv_lines)))
+    return RecordingData(metadata=metadata, rows=list(reader))
 
 
 @dataclass(frozen=True)
@@ -37,12 +68,27 @@ def _required_rate(row: dict[str, str], deg_key: str, rad_key: str) -> float:
 
         return degrees(float(row[rad_key]))
     raise KeyError(f"Missing both {deg_key!r} and {rad_key!r} in recording row.")
-def load_recording_series(path: str | Path, hz: int) -> RecordingSeries:
+
+
+def _resolve_recording_hz(metadata: dict[str, str], hz: int | None) -> int:
+    if hz is None:
+        raw_hz = metadata.get("hz")
+        if raw_hz in (None, ""):
+            raise ValueError(
+                "Recording sample rate is missing. Pass --hz for older CSV files."
+            )
+        hz = int(raw_hz)
     if hz <= 0:
         raise ValueError("hz must be greater than 0 for offline plotting.")
+    return hz
 
-    rows = load_recording(path)
-    time_s = [index / hz for index in range(len(rows))]
+
+def load_recording_series(path: str | Path, hz: int | None = None) -> RecordingSeries:
+    recording = load_recording(path)
+    effective_hz = _resolve_recording_hz(recording.metadata, hz)
+    rows = recording.rows
+
+    time_s = [index / effective_hz for index in range(len(rows))]
 
     return RecordingSeries(
         time_s=time_s,
@@ -58,7 +104,7 @@ def load_recording_series(path: str | Path, hz: int) -> RecordingSeries:
     )
 
 
-def plot_recording(path: str | Path, hz: int) -> None:
+def plot_recording(path: str | Path, hz: int | None = None) -> None:
     try:
         import matplotlib.pyplot as plt
     except ImportError as exc:

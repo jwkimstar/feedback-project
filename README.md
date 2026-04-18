@@ -87,6 +87,9 @@ python3 -m python_client --hz 5 --wait 10
 ### 2. Record a telemetry session to CSV
 
 This writes telemetry samples to a CSV file for later analysis.
+The recording now includes leading metadata lines for the requested `hz`, and
+controller-enabled `run_all` recordings also store the active controller mode,
+controller types, and controller gains.
 
 ```bash
 python3 -m python_client.cli.record_session --hz 10
@@ -131,19 +134,23 @@ Options:
 
 ### 4. Plot a recorded CSV session after the simulation
 
-This opens offline plots for recorded roll, pitch, yaw, `p`, `q`, and `r` using elapsed time inferred from the sample rate.
+This opens offline plots for recorded roll, pitch, yaw, `p`, `q`, and `r`
+using elapsed time inferred from the stored recording metadata.
 
 ```bash
-python3 -m python_client.cli.plot_recording artifacts/session-20260402-120000.csv --hz 10
+python3 -m python_client.cli.plot_recording artifacts/session-20260402-120000.csv
 ```
 
 Installed script form:
 
 ```bash
-python-client-plot-recording artifacts/session-20260402-120000.csv --hz 10
+python-client-plot-recording artifacts/session-20260402-120000.csv
 ```
 
-The `--hz` flag is not a live streaming frequency here. It tells the tool what sample rate was used when the CSV was recorded so it can reconstruct elapsed time. The current CSV format does not store timestamps, so if the session was recorded at a different rate, pass the matching `--hz` value or the x-axis will be wrong.
+The optional `--hz` flag is not a live streaming frequency here. It overrides
+the sample rate used to reconstruct elapsed time. Newer CSV recordings store
+their own `hz` metadata, so this flag is mainly for older recordings that do
+not have metadata yet.
 
 ### 5. Run terminal output, CSV recording, and live plotting together
 
@@ -179,8 +186,8 @@ If you run `python_client.cli.run_yaw_damper` without one of these flags, it def
 
 Controller types:
 
-- Yaw damper: `p` or `pi`
-- Roll damper: `p` or `pi`
+- Yaw damper: `p`, `pi`, `pd`, or `pid`
+- Roll damper: `p`, `pi`, `pd`, or `pid`
 - Heading hold: `p`, `pi`, `pd`, or `pid`
 
 ```bash
@@ -205,6 +212,12 @@ To run the yaw damper in PI mode:
 python3 -m python_client.cli.run_yaw_damper --yaw-damper --hz 10 --yaw-controller-type pi --yaw-damper-gain 2.0 --yaw-damper-integral-gain 0.03 --desired-yaw-rate-deg-s 5.0
 ```
 
+To run the yaw damper in PID mode:
+
+```bash
+python3 -m python_client.cli.run_yaw_damper --yaw-damper --hz 10 --yaw-controller-type pid --yaw-damper-gain 2.0 --yaw-damper-integral-gain 0.03 --yaw-damper-derivative-gain 0.1 --desired-yaw-rate-deg-s 5.0
+```
+
 To run the yaw-plus-roll cascade:
 
 ```bash
@@ -215,6 +228,12 @@ To run the yaw-plus-roll cascade with PI control on both dampers:
 
 ```bash
 python3 -m python_client.cli.run_yaw_damper --yaw-roll-damper --hz 10 --yaw-controller-type pi --roll-controller-type pi --yaw-damper-gain 1.0 --yaw-damper-integral-gain 0.03 --roll-damper-gain 0.35 --roll-damper-integral-gain 0.01 --desired-roll-rate-deg-s 0.0
+```
+
+To run the yaw-plus-roll cascade with PID control on both dampers:
+
+```bash
+python3 -m python_client.cli.run_yaw_damper --yaw-roll-damper --hz 10 --yaw-controller-type pid --roll-controller-type pid --yaw-damper-gain 1.0 --yaw-damper-integral-gain 0.03 --yaw-damper-derivative-gain 0.1 --roll-damper-gain 0.35 --roll-damper-integral-gain 0.01 --roll-damper-derivative-gain 0.1 --desired-roll-rate-deg-s 0.0
 ```
 
 To run the full heading-hold -> roll-damper -> yaw-damper cascade:
@@ -242,16 +261,18 @@ python3 -m python_client.cli.run_yaw_damper --yaw-roll-heading-hold --hz 10 --he
 ```
 
 Options:
-- `--yaw-controller-type`: choose `p` or `pi` for the yaw-damper block. Defaults to `p`.
-- `--roll-controller-type`: choose `p` or `pi` for the roll-damper block. Defaults to `p`.
+- `--yaw-controller-type`: choose `p`, `pi`, `pd`, or `pid` for the yaw-damper block. Defaults to `p`.
+- `--roll-controller-type`: choose `p`, `pi`, `pd`, or `pid` for the roll-damper block. Defaults to `p`.
 - `--heading-controller-type`: choose `p`, `pi`, `pd`, or `pid` for the heading-hold block. Defaults to `p`.
 - `--yaw-damper-gain`: proportional gain for the yaw-damper block
-- `--yaw-damper-integral-gain`: integral gain for the yaw-damper block when PI mode is selected
+- `--yaw-damper-integral-gain`: integral gain for the yaw-damper block when PI or PID mode is selected
+- `--yaw-damper-derivative-gain`: derivative gain for the yaw-damper block when PD or PID mode is selected
 - `--roll-damper-gain`: proportional gain for the roll-damper block
-- `--roll-damper-integral-gain`: integral gain for the roll-damper block when PI mode is selected
+- `--roll-damper-integral-gain`: integral gain for the roll-damper block when PI or PID mode is selected
+- `--roll-damper-derivative-gain`: derivative gain for the roll-damper block when PD or PID mode is selected
 - `--roll-damper-max-yaw-rate-deg-s`: symmetric clamp on roll-damper output, interpreted as commanded yaw rate in deg/s
 - `--heading-hold-gain`: proportional gain for the heading-hold block
-- `--heading-hold-integral-gain`: integral gain for the heading-hold block when PI mode is selected
+- `--heading-hold-integral-gain`: integral gain for the heading-hold block when PI or PID mode is selected
 - `--heading-hold-derivative-gain`: derivative gain for the heading-hold block when PD or PID mode is selected
 - `--desired-yaw-rate-deg-s`: desired yaw-rate signal in degrees per second for yaw-damper-only mode. `0.0` means drive yaw rate toward zero.
 - `--desired-roll-rate-deg-s`: desired roll-rate signal in degrees per second for yaw-plus-roll mode
@@ -260,11 +281,12 @@ Options:
 Controller notes:
 - `--target-heading-deg` is entered in degrees at the command line.
 - Heading-hold calculations convert the wrapped shortest heading error to radians internally before it is passed into the rest of the cascade.
+- Yaw- and roll-damper derivative terms are taken from measurement change, not target error change, to avoid derivative kick when the commanded signal steps.
 - The heading-hold derivative term is taken from heading measurement change, not target error change, to avoid derivative kick when the target heading steps.
 - Use `--roll-damper-max-yaw-rate-deg-s` to keep the initial yaw-rate request from spiking when the upstream heading error is large.
-- Yaw, roll, and heading PI modes all include integral anti-windup clamping.
+- Yaw, roll, and heading PI/PID modes all include integral anti-windup clamping.
 
-The PI integrators use `dt` measured from the spacing between successive X-Plane telemetry samples received by the client.
+The PI and PID integrators use `dt` measured from the spacing between successive X-Plane telemetry samples received by the client.
 
 ### 7. Run plotting, recording, terminal output, and the controller together
 
@@ -290,6 +312,12 @@ To use PI control with live plotting:
 
 ```bash
 python3 -m python_client.cli.run_all --hz 10 --history-seconds 60 --yaw-roll-damper --yaw-controller-type pi --roll-controller-type pi --yaw-damper-gain 1.0 --yaw-damper-integral-gain 0.03 --roll-damper-gain 0.35 --roll-damper-integral-gain 0.01
+```
+
+To use PID control on the yaw and roll dampers with live plotting:
+
+```bash
+python3 -m python_client.cli.run_all --hz 10 --history-seconds 60 --yaw-roll-damper --yaw-controller-type pid --roll-controller-type pid --yaw-damper-gain 1.0 --yaw-damper-integral-gain 0.03 --yaw-damper-derivative-gain 0.1 --roll-damper-gain 0.35 --roll-damper-integral-gain 0.01 --roll-damper-derivative-gain 0.1
 ```
 
 To use the full heading-hold cascade:

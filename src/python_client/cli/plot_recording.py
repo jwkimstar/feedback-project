@@ -1,7 +1,6 @@
 import argparse
 from pathlib import Path
 
-from python_client.config import DEFAULT_NETWORK_CONFIG
 from python_client.plotting.analysis import plot_recording
 
 
@@ -17,8 +16,8 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--hz",
         type=int,
-        default=DEFAULT_NETWORK_CONFIG.rpos_hz,
-        help="Sample rate used when the recording was captured. It is used to reconstruct the elapsed-time axis because the CSV does not store timestamps.",
+        default=None,
+        help="Optional sample-rate override used to reconstruct elapsed time. If omitted, the tool reads hz from newer CSV recording metadata.",
     )
     return parser
 

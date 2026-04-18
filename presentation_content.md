@@ -628,4 +628,7 @@ If time is limited, generate these plots only:
 
 ## Appendix: Important Caution
 
-The current CSV recordings do not store full experiment metadata such as controller gains, controller type, or explicit target labels. Before the final presentation, verify that the selected baseline and final runs correspond to comparable conditions.
+CSV recordings now store requested `hz` and controller configuration metadata.
+Explicit target labels are still not recorded, so verify that the selected
+baseline and final runs correspond to comparable conditions before the final
+presentation.

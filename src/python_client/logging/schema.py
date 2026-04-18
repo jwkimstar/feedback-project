@@ -1,6 +1,36 @@
+from dataclasses import dataclass, fields
 from math import degrees
 
 from python_client.models import AircraftState, ControlCommand
+
+
+@dataclass(frozen=True)
+class RecordingMetadata:
+    hz: int
+    control_mode: str | None = None
+    yaw_controller_type: str | None = None
+    roll_controller_type: str | None = None
+    heading_controller_type: str | None = None
+    yaw_damper_gain: float | None = None
+    yaw_damper_integral_gain: float | None = None
+    yaw_damper_derivative_gain: float | None = None
+    roll_damper_gain: float | None = None
+    roll_damper_integral_gain: float | None = None
+    roll_damper_derivative_gain: float | None = None
+    roll_damper_max_yaw_rate_deg_s: float | None = None
+    heading_hold_gain: float | None = None
+    heading_hold_integral_gain: float | None = None
+    heading_hold_derivative_gain: float | None = None
+
+    def to_comment_lines(self) -> list[str]:
+        return [
+            f"# {field.name}={self._format_value(getattr(self, field.name))}"
+            for field in fields(self)
+        ]
+
+    @staticmethod
+    def _format_value(value: object | None) -> str:
+        return "" if value is None else str(value)
 
 
 CSV_HEADER = [

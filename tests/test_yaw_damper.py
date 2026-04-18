@@ -88,6 +88,91 @@ def test_yaw_damper_pi_respects_integral_limit_and_reset() -> None:
     assert reset_command.aileron == pytest.approx(0.0)
 
 
+def test_yaw_damper_pd_uses_measurement_derivative() -> None:
+    controller = YawDamperController(
+        YawDamperGains(proportional_gain=0.0, derivative_gain=1.0)
+    )
+
+    first = controller.compute(
+        make_state(0.25),
+        signal=0.0,
+        dt_s=0.5,
+        controller_type="pd",
+    )
+    second = controller.compute(
+        make_state(0.35),
+        signal=0.0,
+        dt_s=0.5,
+        controller_type="pd",
+    )
+
+    assert first.aileron == pytest.approx(0.0)
+    assert second.aileron == pytest.approx(-0.2)
+
+
+def test_yaw_damper_pd_avoids_derivative_kick_on_signal_step() -> None:
+    controller = YawDamperController(
+        YawDamperGains(proportional_gain=0.0, derivative_gain=1.0)
+    )
+
+    first = controller.compute(
+        make_state(0.25),
+        signal=0.0,
+        dt_s=0.5,
+        controller_type="pd",
+    )
+    second = controller.compute(
+        make_state(0.25),
+        signal=1.0,
+        dt_s=0.5,
+        controller_type="pd",
+    )
+
+    assert first.aileron == pytest.approx(0.0)
+    assert second.aileron == pytest.approx(0.0)
+
+
+def test_yaw_damper_pid_combines_integral_and_derivative_terms() -> None:
+    controller = YawDamperController(
+        YawDamperGains(
+            proportional_gain=2.0,
+            integral_gain=1.0,
+            integral_limit=10.0,
+            derivative_gain=0.5,
+        )
+    )
+
+    first = controller.compute(
+        make_state(0.25),
+        signal=0.1,
+        dt_s=0.5,
+        controller_type="pid",
+    )
+    second = controller.compute(
+        make_state(0.35),
+        signal=0.1,
+        dt_s=0.5,
+        controller_type="pid",
+    )
+
+    assert first.aileron == pytest.approx(-0.375)
+    assert second.aileron == pytest.approx(-0.8)
+
+
+def test_yaw_damper_reset_clears_derivative_state() -> None:
+    controller = YawDamperController(
+        YawDamperGains(proportional_gain=0.0, derivative_gain=1.0)
+    )
+
+    controller.compute(make_state(0.25), dt_s=0.5, controller_type="pd")
+    charged = controller.compute(make_state(0.35), dt_s=0.5, controller_type="pd")
+    controller.reset()
+    reset = controller.compute(make_state(0.35), dt_s=0.5, controller_type="pd")
+
+    assert charged.aileron == pytest.approx(-0.2)
+    assert reset.aileron == pytest.approx(0.0)
+
+
 def test_build_control_command_packet_populates_control_surface_row() -> None:
     packet = build_control_command_packet(
         ControlCommand(elevator=0.1, aileron=-0.2, rudder=0.3, throttle=0.4)

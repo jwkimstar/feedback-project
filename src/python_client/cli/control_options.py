@@ -46,7 +46,13 @@ def add_master_controller_arguments(
         "--yaw-damper-integral-gain",
         type=float,
         default=MasterControllerGains.yaw_damper_integral_gain,
-        help="Integral gain used by the yaw-damper block when PI mode is selected.",
+        help="Integral gain used by the yaw-damper block when PI or PID mode is selected.",
+    )
+    parser.add_argument(
+        "--yaw-damper-derivative-gain",
+        type=float,
+        default=MasterControllerGains.yaw_damper_derivative_gain,
+        help="Derivative gain used by the yaw-damper block when PD or PID mode is selected.",
     )
     parser.add_argument(
         "--roll-damper-gain",
@@ -58,7 +64,13 @@ def add_master_controller_arguments(
         "--roll-damper-integral-gain",
         type=float,
         default=MasterControllerGains.roll_damper_integral_gain,
-        help="Integral gain used by the roll-damper block when PI mode is selected.",
+        help="Integral gain used by the roll-damper block when PI or PID mode is selected.",
+    )
+    parser.add_argument(
+        "--roll-damper-derivative-gain",
+        type=float,
+        default=MasterControllerGains.roll_damper_derivative_gain,
+        help="Derivative gain used by the roll-damper block when PD or PID mode is selected.",
     )
     parser.add_argument(
         "--roll-damper-max-yaw-rate-deg-s",
@@ -68,13 +80,13 @@ def add_master_controller_arguments(
     )
     parser.add_argument(
         "--yaw-controller-type",
-        choices=("p", "pi"),
+        choices=("p", "pi", "pd", "pid"),
         default=MasterControllerControllerTypes.yaw_damper,
         help="Choose the yaw-damper controller type.",
     )
     parser.add_argument(
         "--roll-controller-type",
-        choices=("p", "pi"),
+        choices=("p", "pi", "pd", "pid"),
         default=MasterControllerControllerTypes.roll_damper,
         help="Choose the roll-damper controller type.",
     )
@@ -94,7 +106,7 @@ def add_master_controller_arguments(
         "--heading-hold-integral-gain",
         type=float,
         default=MasterControllerGains.heading_hold_integral_gain,
-        help="Integral gain used by the heading-hold block when PI mode is selected.",
+        help="Integral gain used by the heading-hold block when PI or PID mode is selected.",
     )
     parser.add_argument(
         "--heading-hold-derivative-gain",
@@ -137,8 +149,10 @@ def build_master_controller(
     gains = MasterControllerGains(
         yaw_damper_gain=args.yaw_damper_gain,
         yaw_damper_integral_gain=args.yaw_damper_integral_gain,
+        yaw_damper_derivative_gain=args.yaw_damper_derivative_gain,
         roll_damper_gain=args.roll_damper_gain,
         roll_damper_integral_gain=args.roll_damper_integral_gain,
+        roll_damper_derivative_gain=args.roll_damper_derivative_gain,
         roll_damper_max_yaw_rate_rad_s=(
             None
             if args.roll_damper_max_yaw_rate_deg_s is None

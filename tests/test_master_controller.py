@@ -164,6 +164,70 @@ def test_roll_damper_pi_clamps_large_signal_to_max_yaw_rate() -> None:
     assert output == pytest.approx(-radians(5.0))
 
 
+def test_roll_damper_pd_uses_measurement_derivative() -> None:
+    controller = RollDamperController(
+        RollDamperGains(
+            proportional_gain=0.0,
+            derivative_gain=1.0,
+        )
+    )
+
+    first = controller.compute_output_pd(0.3, 0.0, dt_s=0.5)
+    second = controller.compute_output_pd(0.4, 0.0, dt_s=0.5)
+
+    assert first == pytest.approx(0.0)
+    assert second == pytest.approx(-0.2)
+
+
+def test_roll_damper_pd_avoids_derivative_kick_on_signal_step() -> None:
+    controller = RollDamperController(
+        RollDamperGains(
+            proportional_gain=0.0,
+            derivative_gain=1.0,
+        )
+    )
+
+    first = controller.compute_output_pd(0.3, 0.0, dt_s=0.5)
+    second = controller.compute_output_pd(0.3, 1.0, dt_s=0.5)
+
+    assert first == pytest.approx(0.0)
+    assert second == pytest.approx(0.0)
+
+
+def test_roll_damper_pid_combines_integral_and_derivative_terms() -> None:
+    controller = RollDamperController(
+        RollDamperGains(
+            proportional_gain=2.0,
+            integral_gain=1.0,
+            integral_limit=10.0,
+            derivative_gain=0.5,
+        )
+    )
+
+    first = controller.compute_output_pid(0.3, 0.1, dt_s=0.5)
+    second = controller.compute_output_pid(0.4, 0.1, dt_s=0.5)
+
+    assert first == pytest.approx(-0.5)
+    assert second == pytest.approx(-0.95)
+
+
+def test_roll_damper_reset_clears_derivative_state() -> None:
+    controller = RollDamperController(
+        RollDamperGains(
+            proportional_gain=0.0,
+            derivative_gain=1.0,
+        )
+    )
+
+    controller.compute_output_pd(0.3, 0.0, dt_s=0.5)
+    charged = controller.compute_output_pd(0.4, 0.0, dt_s=0.5)
+    controller.reset()
+    reset = controller.compute_output_pd(0.4, 0.0, dt_s=0.5)
+
+    assert charged == pytest.approx(-0.2)
+    assert reset == pytest.approx(0.0)
+
+
 def test_master_controller_yaw_only_mode_returns_aileron_command() -> None:
     controller = MasterController(
         mode=MasterControllerMode.YAW_DAMPER,
@@ -209,6 +273,31 @@ def test_master_controller_yaw_roll_pi_mode_uses_integral_action() -> None:
 
     assert first.aileron == pytest.approx(-0.4125)
     assert second.aileron == pytest.approx(-0.5875)
+
+
+def test_master_controller_yaw_roll_pid_mode_uses_derivative_action() -> None:
+    controller = MasterController(
+        mode=MasterControllerMode.YAW_ROLL_DAMPER,
+        gains=MasterControllerGains(
+            yaw_damper_gain=0.5,
+            yaw_damper_integral_gain=0.5,
+            yaw_damper_derivative_gain=0.25,
+            roll_damper_gain=0.5,
+            roll_damper_integral_gain=0.5,
+            roll_damper_derivative_gain=0.25,
+        ),
+        targets=MasterControllerTargets(desired_roll_rate_rad_s=0.1),
+        controller_types=MasterControllerControllerTypes(
+            yaw_damper="pid",
+            roll_damper="pid",
+        ),
+    )
+
+    first = controller.compute(make_state(p_rad_s=0.3, r_rad_s=0.4), dt_s=0.5)
+    second = controller.compute(make_state(p_rad_s=0.35, r_rad_s=0.45), dt_s=0.5)
+
+    assert first.aileron == pytest.approx(-0.4125)
+    assert second.aileron == pytest.approx(-0.696875)
 
 
 def test_master_controller_reset_clears_integral_state() -> None:

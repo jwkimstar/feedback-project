@@ -3,6 +3,7 @@ from datetime import datetime
 from pathlib import Path
 
 from python_client.config import DEFAULT_NETWORK_CONFIG, DEFAULT_PATHS_CONFIG
+from python_client.logging.schema import RecordingMetadata
 from python_client.logging.recorder import SessionRecorder
 from python_client.runtime import close_handlers, stream_to_handlers
 
@@ -40,7 +41,7 @@ def default_output_path() -> Path:
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     output_path = args.output or default_output_path()
-    recorder = SessionRecorder(output_path)
+    recorder = SessionRecorder(output_path, metadata=RecordingMetadata(hz=args.hz))
 
     try:
         recorder.__enter__()

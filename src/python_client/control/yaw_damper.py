@@ -3,7 +3,7 @@ from typing import Literal, Protocol
 
 from python_client.models import AircraftState, ControlCommand
 
-ControllerType = Literal["p", "pi"]
+ControllerType = Literal["p", "pi", "pd", "pid"]
 
 
 @dataclass(frozen=True)
@@ -11,6 +11,7 @@ class YawDamperGains:
     proportional_gain: float = 1.0
     integral_gain: float = 0.15
     integral_limit: float = 1.0
+    derivative_gain: float = 0.0
     min_aileron: float = -1.0
     max_aileron: float = 1.0
 
@@ -26,6 +27,21 @@ class YawDamperController:
     def __init__(self, gains: YawDamperGains | None = None) -> None:
         self.gains = gains or YawDamperGains()
         self._integral_error = 0.0
+        self._previous_yaw_rate_rad_s: float | None = None
+
+    def _compute_yaw_accel_rad_s2(
+        self,
+        current_yaw_rate_rad_s: float,
+        dt_s: float,
+    ) -> float:
+        if dt_s <= 0.0 or self._previous_yaw_rate_rad_s is None:
+            self._previous_yaw_rate_rad_s = current_yaw_rate_rad_s
+            return 0.0
+        yaw_accel_rad_s2 = (
+            current_yaw_rate_rad_s - self._previous_yaw_rate_rad_s
+        ) / dt_s
+        self._previous_yaw_rate_rad_s = current_yaw_rate_rad_s
+        return yaw_accel_rad_s2
 
     def compute_output_p(
         self,
@@ -61,6 +77,41 @@ class YawDamperController:
         )
         return max(self.gains.min_aileron, min(self.gains.max_aileron, aileron))
 
+    def compute_output_pd(
+        self,
+        current_yaw_rate_rad_s: float,
+        signal: float = 0.0,
+        dt_s: float = 0.0,
+    ) -> float:
+        error = signal - current_yaw_rate_rad_s
+        yaw_accel_rad_s2 = self._compute_yaw_accel_rad_s2(current_yaw_rate_rad_s, dt_s)
+        aileron = (
+            self.gains.proportional_gain * error
+            - self.gains.derivative_gain * yaw_accel_rad_s2
+        )
+        return max(self.gains.min_aileron, min(self.gains.max_aileron, aileron))
+
+    def compute_output_pid(
+        self,
+        current_yaw_rate_rad_s: float,
+        signal: float = 0.0,
+        dt_s: float = 0.0,
+    ) -> float:
+        error = signal - current_yaw_rate_rad_s
+        if dt_s > 0.0:
+            self._integral_error += error * dt_s
+            self._integral_error = max(
+                -self.gains.integral_limit,
+                min(self.gains.integral_limit, self._integral_error),
+            )
+        yaw_accel_rad_s2 = self._compute_yaw_accel_rad_s2(current_yaw_rate_rad_s, dt_s)
+        aileron = (
+            self.gains.proportional_gain * error
+            + self.gains.integral_gain * self._integral_error
+            - self.gains.derivative_gain * yaw_accel_rad_s2
+        )
+        return max(self.gains.min_aileron, min(self.gains.max_aileron, aileron))
+
     def compute(
         self,
         state: AircraftState,
@@ -70,12 +121,18 @@ class YawDamperController:
     ) -> ControlCommand:
         if controller_type == "pi":
             aileron = self.compute_output_pi(state.r_rad_s, signal=signal, dt_s=dt_s)
+        elif controller_type == "pd":
+            aileron = self.compute_output_pd(state.r_rad_s, signal=signal, dt_s=dt_s)
+        elif controller_type == "pid":
+            aileron = self.compute_output_pid(state.r_rad_s, signal=signal, dt_s=dt_s)
         else:
+            self._compute_yaw_accel_rad_s2(state.r_rad_s, dt_s)
             aileron = self.compute_output_p(state.r_rad_s, signal=signal)
         return ControlCommand(aileron=aileron)
 
     def reset(self) -> None:
         self._integral_error = 0.0
+        self._previous_yaw_rate_rad_s = None
 
 
 class YawDamperHandler:

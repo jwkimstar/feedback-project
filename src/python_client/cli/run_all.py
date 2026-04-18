@@ -1,11 +1,13 @@
 import argparse
 from datetime import datetime
+from math import degrees
 from pathlib import Path
 
 from python_client.cli.control_options import add_master_controller_arguments, build_master_controller
 from python_client.console import TelemetryPrinter
 from python_client.config import DEFAULT_NETWORK_CONFIG, DEFAULT_PATHS_CONFIG
 from python_client.control import MasterController, MasterControllerHandler
+from python_client.logging.schema import RecordingMetadata
 from python_client.logging.recorder import SessionRecorder
 from python_client.plotting.realtime import LivePlotter
 from python_client.runtime import StopRequested, close_handlers, run_client_to_handlers, trap_sigint
@@ -55,6 +57,31 @@ def main(argv: list[str] | None = None) -> int:
     output_path = args.output or default_output_path()
     handlers = []
     mode, gains, targets, controller_types = build_master_controller(args)
+    metadata = RecordingMetadata(
+        hz=args.hz,
+        control_mode=None if mode is None else mode.value,
+        yaw_controller_type=None if mode is None else controller_types.yaw_damper,
+        roll_controller_type=None if mode is None else controller_types.roll_damper,
+        heading_controller_type=None if mode is None else controller_types.heading_hold,
+        yaw_damper_gain=None if mode is None else gains.yaw_damper_gain,
+        yaw_damper_integral_gain=None if mode is None else gains.yaw_damper_integral_gain,
+        yaw_damper_derivative_gain=(
+            None if mode is None else gains.yaw_damper_derivative_gain
+        ),
+        roll_damper_gain=None if mode is None else gains.roll_damper_gain,
+        roll_damper_integral_gain=None if mode is None else gains.roll_damper_integral_gain,
+        roll_damper_derivative_gain=(
+            None if mode is None else gains.roll_damper_derivative_gain
+        ),
+        roll_damper_max_yaw_rate_deg_s=(
+            None
+            if mode is None or gains.roll_damper_max_yaw_rate_rad_s is None
+            else degrees(gains.roll_damper_max_yaw_rate_rad_s)
+        ),
+        heading_hold_gain=None if mode is None else gains.heading_hold_gain,
+        heading_hold_integral_gain=None if mode is None else gains.heading_hold_integral_gain,
+        heading_hold_derivative_gain=None if mode is None else gains.heading_hold_derivative_gain,
+    )
 
     try:
         with trap_sigint() as should_stop:
@@ -74,7 +101,11 @@ def main(argv: list[str] | None = None) -> int:
                     command_provider = master_handler
 
                 printer = TelemetryPrinter(command_provider=command_provider)
-                recorder = SessionRecorder(output_path, command_provider=command_provider)
+                recorder = SessionRecorder(
+                    output_path,
+                    command_provider=command_provider,
+                    metadata=metadata,
+                )
                 plotter = LivePlotter(
                     hz=args.hz,
                     history_seconds=args.history_seconds,
